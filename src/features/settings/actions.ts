@@ -1,0 +1,86 @@
+"use server";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { requireCapability } from "@/lib/auth/session";
+import { friendlyDbError, type ActionState } from "@/lib/utils";
+
+const optional = z
+  .string()
+  .trim()
+  .transform((v) => (v === "" ? null : v))
+  .nullable();
+
+const schema = z.object({
+  name: z.string().trim().min(2, "School name is required"),
+  short_name: optional,
+  address_line1: optional,
+  address_line2: optional,
+  city: optional,
+  district: optional,
+  state: optional,
+  pincode: optional.refine((v) => !v || /^\d{6}$/.test(v), "Pincode must be 6 digits"),
+  phone: optional,
+  email: optional.refine((v) => !v || z.string().email().safeParse(v).success, "Enter a valid email"),
+  website: optional,
+  board: optional,
+  affiliation_no: optional,
+  udise_code: optional.refine((v) => !v || /^\d{11}$/.test(v), "UDISE code is 11 digits"),
+  principal_name: optional,
+  mediums: z
+    .string()
+    .transform((v) => v.split(",").map((m) => m.trim()).filter(Boolean))
+    .refine((a) => a.length > 0, "Add at least one medium"),
+  working_days: z.array(z.coerce.number().int().min(1).max(7)).min(1, "Pick at least one working day"),
+  second_saturday_holiday: z.boolean(),
+  periods_per_day: z.coerce.number().int().min(1).max(15),
+  motto: optional,
+  admission_no_prefix: z.string().trim(),
+  receipt_no_prefix: z.string().trim(),
+});
+
+export async function updateSettings(_: ActionState, formData: FormData): Promise<ActionState> {
+  await requireCapability("settings.edit");
+  const raw = Object.fromEntries(formData);
+  const parsed = schema.safeParse({
+    ...raw,
+    working_days: formData.getAll("working_days"),
+    second_saturday_holiday: formData.get("second_saturday_holiday") === "on",
+  });
+  if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors, error: "Please fix the highlighted fields." };
+
+  const supabase = await createClient();
+  const { motto, ...columns } = parsed.data;
+  // Motto lives in the `extra` JSON (no dedicated column yet) — merge, don't overwrite.
+  const { data: current } = await supabase.from("school_settings").select("extra").eq("id", 1).single();
+  const extra = { ...((current?.extra as Record<string, unknown> | null) ?? {}), motto };
+  const { error } = await supabase.from("school_settings").update({ ...columns, extra }).eq("id", 1);
+  if (error) return { error: friendlyDbError(error) };
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Settings saved." };
+}
+
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
+
+/** Upload logo or principal signature to the `branding` bucket. */
+export async function uploadBrandingImage(_: ActionState, formData: FormData): Promise<ActionState> {
+  await requireCapability("settings.edit");
+  const kind = formData.get("kind");
+  const file = formData.get("file");
+  if (kind !== "logo" && kind !== "signature") return { error: "Unknown image type." };
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose an image file." };
+  if (!IMAGE_TYPES.includes(file.type)) return { error: "Use a PNG, JPG, WEBP or SVG image." };
+  if (file.size > 2 * 1024 * 1024) return { error: "Image must be under 2 MB." };
+
+  const supabase = await createClient();
+  const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+  const path = `${kind}-${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage.from("branding").upload(path, file, { contentType: file.type });
+  if (upErr) return { error: upErr.message };
+
+  const patch = kind === "logo" ? { logo_path: path } : { principal_signature_path: path };
+  const { error } = await supabase.from("school_settings").update(patch).eq("id", 1);
+  if (error) return { error: friendlyDbError(error) };
+  revalidatePath("/", "layout");
+  return { ok: true, message: kind === "logo" ? "Logo updated." : "Signature updated." };
+}

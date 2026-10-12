@@ -1,0 +1,189 @@
+# Decisions log
+
+Everything here is a default or assumption I chose. Each item can be changed later. Most are
+**admin settings, not code**. Items marked **⚠ VERIFY** need checking against your school's
+official documents before go-live.
+
+Last updated: 2026-10-12 (Module 1 + design pass + permission model v2)
+
+---
+
+## 1. Defaults you approved ("use default")
+
+| # | Topic | Default | Where to change |
+|---|---|---|---|
+| D1 | Academic year | April 1 – March 31 (e.g. "2026-27") | Setup → Academic years |
+| D2 | Fee heads | ~~Default list~~ **Superseded:** you asked me to confirm the other fee heads with you when the Fees module starts. **Transport is disabled** (no school buses). | Fees → Fee heads |
+| D3 | Fee installments | ~~4 quarters~~ **Superseded:** to be confirmed with you in the Fees module (how tuition is paid, installments, due dates). | Fees → Installments |
+| D4 | Report card format | One page per term: school header + logo, student details, scholastic marks table (each exam + total + grade), co-scholastic grades, attendance (working days / present incl. half days), class teacher remarks, result, signatures (class teacher, principal, parent) | Settings → Report card layout |
+
+## 2. Your instructions turned into rules
+
+| # | Rule |
+|---|---|
+| R1 | Board: **Andhra Pradesh State Board**. Classes Nursery → Class 10. |
+| R2 | Every section has a **medium**. The list of mediums (default: English, Telugu) is in Settings, not code. |
+| R3 | Exam names are fully admin-managed per academic year and class. Seeded defaults: **FA1, FA2, SA1, FA3, FA4, SA2**. All of them are editable or deletable. |
+| R4 | Working days Mon–Sat. The **2nd Saturday of every month** is generated automatically as a holiday when an academic year is created. Admin adds other holidays. Default 8 periods/day (editable). |
+| R5 | Student attendance is taken in **2 sessions** (morning, afternoon). Daily value: both = 1 day, one session = 0.5 day (half day), none = absent. |
+| R6 | Aadhaar and other government ID numbers are encrypted at rest and shown masked (last 4 digits). Only Admin and Computer Staff can see the full number. They are never in the audit log (stored as `[REDACTED]`) or default exports. Only Admin can run the government data export. |
+| R7 | Hosted Supabase dev project **`kchs-erp-dev`** (Mumbai, Free plan, $0/month), created 2026-10-11. The older project `kchs-school` (an earlier website/ERP build with its own data) was **left untouched and re-paused**. I ask before any command that creates or changes anything in Supabase. |
+| R8 | School: **Krishna Chaitanya High School**, Yerraguntla, YSR Kadapa District, Andhra Pradesh. Curriculum: AP State. Classes Nursery–Class 10. Seeded as **real configuration** (`supabase/seed/school_config.sql`), not demo data. |
+| R9 | **Medium is unconfirmed:** sections may have no medium. The Settings list (English, Telugu) is editable. |
+| R10 | **No school buses:** the Transport fee head and transport fields are left out. |
+| R11 | **Parent Aadhaar and the mother's bank account are NOT stored** until you confirm with the education office. If added later, they will be custom fields that are encrypted and **Admin-only**. |
+| R12 | Real student records only after the security review. All student data in the demo set is dummy data. |
+| R13 | **Permission model v2 (2026-10-12).** Two active roles: **Admin** (the owner, controls everything) and **Teacher**. `computer_staff` stays in the database for the future but nobody can assign it and the UI hides it. Teachers gain office work only through **duties** granted by Admin (`staff_permissions`; `has_duty()` in RLS and the same check in server code). All duties are off by default. Each grant and revoke is audit-logged. |
+| R14 | Duties: `student_records`, `fee_collection`, `all_class_attendance`, `all_class_marks`, `notices_diary`, `timetable_edit`, `certificates_idcards`, `government_ids_view`. A duty gives exactly what the old Computer Staff role had for that module, nothing more. Without duties a teacher sees only their own classes and subjects. |
+| R15 | **Always Admin-only:** users and duties, school settings, staff records, grading scale, teacher assignments, fee setup, locking/unlocking exams, cancelling receipts, deleting anything, audit log, government data export, staff leave approval. |
+| R16 | Sections 2026-27: **one section "A" per class, English medium** (13 sections). Address: **Vempalli Road, Yerraguntla**. |
+| R17 | **Plan additions:** certificates (TC, bonafide, study) and ID card printing go into **Module 2** (Students). Staff leave tracking goes into **Module 4** (Attendance). |
+
+## 3. Technical choices (mine)
+
+| # | Choice | Why |
+|---|---|---|
+| T1 | **Module order adjusted:** (1) Foundation + Staff + School setup → (2) Students → (3) Timetable → (4) Attendance → (5) Fees → (6) Exams & marks → (7) Notices → (8) Reports → (9) Audit log screens | Sections need staff (class teacher), and attendance needs the timetable to know who marks each session. The audit log *mechanism* exists from module 1, so every change is logged from day one. |
+| T2 | One school per database: settings are a single row | Simpler. Multi-branch is not in scope. |
+| T3 | Role helpers live in a private `app` schema that the API does not expose | Supabase security recommendation |
+| T4 | Students and staff are never hard-deleted. Their status changes instead (left / TC issued / inactive). | Keeps history and government records intact |
+| T5 | The system blocks removing or demoting the **last active Admin** | Prevents lock-out |
+| T6 | `staff_directory` view shows only name/designation/department of colleagues to all staff (teachers need it for timetables). Full staff records stay restricted. | Teachers can't see colleagues' phone/address/DOB |
+| T7 | Permission tests are SQL files in `tests/db/`, run with `npm run test:db`. Each file runs in a transaction that is always rolled back, so tests never leave data behind. | Tests prove the database rules themselves |
+| T8 | Demo logins use emails ending in `@demo.kchs.test`; `npm run seed:wipe` removes them and all demo data | Easy to tell demo data from real data |
+| T9 | Afternoon attendance session = the teacher of the first period **after the period marked "lunch"** in the bell schedule | Lunch is identified explicitly, not guessed |
+| T10 | Colleague names come from a `staff_directory()` function (name/designation/department only) rather than a view | The Supabase security advisor flags definer views |
+| T11 | Supabase advisor warnings accepted on purpose: `public_branding()` callable before sign-in (school name and logo only, for the login page); `log_event()` and `staff_directory()` callable by signed-in staff | They expose nothing sensitive |
+| T12 | The last-Admin guard applies to signed-in users only. Trusted scripts (seed:wipe, SQL editor) can remove demo admins. | Otherwise wiping demo data would be blocked |
+| T13 | Seeds are split: `seed:school` (real config incl. sections, kept), `seed:demo` (dummy staff, 4 demo logins, duties, class teachers, subject assignments), `seed:wipe -- --yes` (removes demo rows only) | Real configuration survives a demo wipe |
+| T14 | The dormant `computer_staff` role keeps its old Phase-1 access in RLS (= every duty), so the original tests still apply. Revisit if it's ever re-enabled. | Doesn't weaken existing tests |
+| T15 | Teacher assignments: a teacher with `timetable_edit` can see all assignments (needed to build timetables); others see only sections they teach | Closest match to "old Computer Staff access for that module" |
+| T16 | Duties can't be edited in place (revoke + grant only); `granted_by` / `granted_at` are always set by the database | Clean audit trail |
+| T17 | Demo logins: `admin@`, `office@` (a **teacher** with fee_collection + student_records), `teacher1@`, `teacher2@` `demo.kchs.test` | Lets you test duties |
+| T18 | Tests create their own mediums inside the rolled-back transaction | Tests no longer depend on live Settings |
+| T19 | A second dev server (e.g. Claude's preview) uses its own build folder via `NEXT_DIST_DIR` | Never clobbers your `npm run dev` |
+| T20 | Login motto is stored in `school_settings.extra.motto`, editable in Settings. The login page reads it server-side with a fixed single-field query until `public_branding()` returns it (planned for the Module 2 migration). | No database change in the design pass |
+
+## 4. ⚠ VERIFY before go-live
+
+| # | Item | What I seeded |
+|---|---|---|
+| V1 | **Grading scale.** Check it against your school's official AP scale (it has been revised more than once, and pass marks differ for some subjects, e.g. Hindi). | A1 91–100 (GP 10), A2 81–90 (9), B1 71–80 (8), B2 61–70 (7), C1 51–60 (6), C2 41–50 (5), D 35–40 (4), E 0–34 (fail). Fully editable in Exams → Grading scale. |
+| V2 | **Government student fields.** Check them against the current UDISE+ Student Data Capture Format and the AP Child Info form. | See section 5 |
+| V3 | Exam weightage (how FA/SA combine into the final result) | Not decided yet. I'll ask in the Exams module. |
+| S1 | **Subject list. VERIFY against our textbook list.** | Telugu, Hindi, English, Mathematics, Environmental Studies, Physical Science, Biological Science, Social Studies, General Awareness, Rhymes & Stories, Drawing |
+| S2 | **Subjects per class. VERIFY against our textbook list.** | Nursery–UKG: English, Telugu, Mathematics, General Awareness, Rhymes & Stories, Drawing · Classes 1–2: Telugu, English, Mathematics · Classes 3–5: + EVS · Classes 6–10: Telugu, Hindi, English, Mathematics, Physical Science, Biological Science, Social Studies |
+| S3 | **Co-scholastic areas (all classes). VERIFY against our textbook list.** | Art & Cultural Education, Work & Computer Education, Physical & Health Education, Value Education & Life Skills |
+
+All of S1–S3 can be changed by the Admin in Setup → Subjects (add, rename, deactivate, re-link per class).
+
+## 4b. Waiting on you
+
+| # | Question | Blocks |
+|---|---|---|
+| ~~P1~~ | ~~Sections per class~~ **Answered:** A only, English (R16) | — |
+| P2 | School details still blank: UDISE code, recognition details, email, website, logo, phone numbers. The dashboard reminds the Admin. | Nothing (fill in any time in Settings) |
+| P3 | Fees: how tuition is paid (installments and due dates) and what other fee heads exist | Fees module |
+
+## 4c. Real reference figures (stored in `supabase/seed/school_reference.json`)
+
+- **Annual tuition (₹):** Nursery 8,250 · LKG 8,800 · UKG 8,800 · Class 1 9,350 · Class 2 9,900 · Class 3 10,450 · Class 4 10,450 · Class 5 11,000 · Class 6 11,550 · Class 7 12,100 · Class 8 13,200 · Class 9 15,400 · Class 10 20,000. These load into the fee tables in the Fees module.
+- **Class strength (reference only, no student rows created):** Nursery 46, LKG 36, UKG 30, Class 1 32, Class 2 31, Class 3 28, Class 4 23, Class 5 16, Class 6 37, Class 7 46, Class 8 37, Class 9 40, Class 10 37. Total 439.
+- **Staff:** 19 teachers and 1 ayah. The demo set mirrors these counts with dummy names.
+
+## 5. Government student data: fields included
+
+Sources: UDISE+ Student Data Capture Format (General, Enrolment and Facility profiles), AP Child Info
+/ Student Info services, and the AP admission register / TC. Fields not listed here can be added
+from the admin "custom fields" screen without code changes.
+
+🔒 = encrypted at rest, masked in the UI, never logged, excluded from default exports.
+
+**A. Identity**
+1. Student name (as in school records)
+2. Student name as per Aadhaar
+3. Gender
+4. Date of birth
+5. 🔒 Aadhaar number
+6. AP Child ID / Student ID (Child Info)
+7. UDISE+ PEN (Permanent Education Number)
+8. APAAR ID
+9. Nationality
+10. Blood group
+11. Height (cm)
+12. Weight (kg)
+13. Identification mark 1
+14. Identification mark 2
+
+**B. Social profile**
+
+15. Social category (UDISE): General / SC / ST / OBC
+16. Caste category (AP): OC / BC-A / BC-B / BC-C / BC-D / BC-E / SC / ST
+17. Caste
+18. Sub-caste
+19. Religion
+20. Minority group (Y/N)
+21. Mother tongue
+22. BPL beneficiary (Y/N)
+23. Antyodaya (AAY) beneficiary (Y/N)
+24. Ration / rice card number
+25. EWS / disadvantaged group (Y/N)
+26. Annual family income
+
+**C. Disability (CWSN)**
+
+27. Child with special needs (Y/N)
+28. Impairment type (RPwD Act categories)
+29. Disability percentage
+30. UDID / disability certificate number
+31. Screened for SLD / ASD / ADHD
+32. CWSN facilities received
+
+**D. Parents / guardian**
+
+33. Father: name, occupation, education, mobile. ~~Aadhaar~~: not stored (R11)
+34. Mother: name, occupation, education, mobile. ~~Aadhaar~~: not stored (R11)
+35. Guardian (if different): name, relation, mobile
+36. Address
+37. Pincode
+38. Primary mobile
+39. Alternate mobile
+40. Email
+41. ~~Mother's bank account~~: not stored (R11). Can be added later as an encrypted, Admin-only custom field.
+
+**E. Enrolment**
+
+42. Admission number
+43. Admission date
+44. Class, section, medium, roll number
+45. Languages studied (1st / 2nd / 3rd)
+46. Admitted under RTE 12(1)(c) (Y/N)
+47. Status in previous year (same school / other school / Anganwadi-ECCE / not in school)
+48. Class studied in previous year
+49. Previous school name
+50. Previous school UDISE code
+51. TC number and TC date
+52. Previous year result and % marks
+53. Previous year days attended
+54. Out-of-school child mainstreamed (Y/N)
+
+**F. Facilities & other (UDISE Facility profile)**
+
+55. Facilities received: free textbooks, uniform, transport, escort, hostel, bicycle, mid-day meal
+56. Gifted / talented (Y/N)
+57. Participated in competitions / Olympiads
+58. NCC / NSS / Scouts & Guides
+59. Can use digital devices (Y/N)
+60. Internet access at home (Y/N)
+
+Parent Aadhaar and the bank account were answered: not stored for now (R11).
+
+## 6. Brand & design (design pass, 2026-10-11)
+
+| # | Decision |
+|---|---|
+| B1 | Colours sampled from the logo: navy `#011a37`, gold `#e6a924`, cream `#fcf6ea`, peacock green `#177f16`; full scales in `src/app/globals.css` (single source). Warning amber, error red. |
+| B2 | Contrast checked (WCAG AA) for every text and background pair used. Gold on white is 2.1:1, so gold is never used as text on white. |
+| B3 | Role colours: Admin gold, Computer Staff navy (hidden), Teacher peacock green. |
+| B4 | Fonts: Noto Sans + Noto Sans Telugu (Telugu names), Cinzel for the school name only. |
+| B5 | Logo sits on a white circular badge with a gold ring on dark areas (artwork unchanged). Icons and favicons are generated by `npm run brand:icons`. The UI logo comes from School settings, with the bundled copy as a fallback. |

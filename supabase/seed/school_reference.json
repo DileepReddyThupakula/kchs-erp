@@ -1,0 +1,16 @@
+{
+  "_note": "Real figures given by the school on 2026-10-11. Reference only: tuition is loaded into fee tables in the Fees module (after installments/due dates and other fee heads are confirmed). Class strength is NOT used to create student rows.",
+  "annual_tuition_inr": {
+    "Nursery": 8250, "LKG": 8800, "UKG": 8800,
+    "Class 1": 9350, "Class 2": 9900, "Class 3": 10450, "Class 4": 10450, "Class 5": 11000,
+    "Class 6": 11550, "Class 7": 12100, "Class 8": 13200, "Class 9": 15400, "Class 10": 20000
+  },
+  "class_strength_reference": {
+    "Nursery": 46, "LKG": 36, "UKG": 30,
+    "Class 1": 32, "Class 2": 31, "Class 3": 28, "Class 4": 23, "Class 5": 16,
+    "Class 6": 37, "Class 7": 46, "Class 8": 37, "Class 9": 40, "Class 10": 37,
+    "_total": 439
+  },
+  "staff_counts": { "teachers": 19, "ayah": 1 },
+  "transport": "none — no school buses; Transport fee head and transport fields are disabled"
+}
