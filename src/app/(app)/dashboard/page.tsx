@@ -75,7 +75,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     return [
       { label: "My classes", value: mine.length, icon: School, accent: "navy", href: "/my/classes" },
       { label: "My subjects", value: new Set(mine.flatMap((m) => m.subjects)).size, icon: BookOpen, accent: "green", href: "/my/classes" },
-      { label: "My students", value: "—", icon: GraduationCap, accent: "gold", hint: "With the Students module" },
+      { label: "My students", value: mine.reduce((n, m) => n + (m.students ?? 0), 0), icon: GraduationCap, accent: "gold", href: "/my/students" },
       { label: next ? `Next holiday · ${next.name}` : "Next holiday", value: next ? formatDate(next.date) : "—", icon: PartyPopper, accent: "cream", href: "/my/holidays" },
     ];
   }

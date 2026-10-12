@@ -112,6 +112,7 @@ export function DataTable<T>({
   exportName,
   exportDetails,
   toolbar,
+  customExport,
 }: {
   /** Stable id: remembers column visibility per table. */
   id: string;
@@ -133,6 +134,8 @@ export function DataTable<T>({
   exportName?: string;
   exportDetails?: Record<string, unknown>;
   toolbar?: React.ReactNode;
+  /** Replace the built-in export menu (e.g. a field picker). Gets selected rows, or all filtered rows. */
+  customExport?: (rows: T[], info: { selectedOnly: boolean; filters: Record<string, string>; search: string }) => void;
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<Record<string, string>>(initialFilters);
@@ -298,7 +301,17 @@ export function DataTable<T>({
               </ul>
             )}
           </Popover>
-          {exportName && (
+          {customExport && (
+            <button
+              type="button"
+              className={toolBtn}
+              onClick={() => customExport(selectedRows.length ? selectedRows : filtered, { selectedOnly: selectedRows.length > 0, filters: active, search: query })}
+            >
+              <Download className="size-4 text-navy-500" aria-hidden />
+              <span className="max-sm:sr-only">Export</span>
+            </button>
+          )}
+          {exportName && !customExport && (
             <Popover
               align="right"
               button={(toggle, open) => (

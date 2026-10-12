@@ -7,6 +7,7 @@ import { EmptyState, PageHeader } from "@/components/ui/card";
 import { LinkTabs } from "@/components/ui/tabs";
 import { YearPicker } from "@/components/ui/year-picker";
 import { ClassesTable, SectionsTable, type ClassRow, type SectionRow } from "./tables";
+import { studentCountsBySection } from "@/features/students/queries";
 
 export const metadata = { title: "Classes & sections" };
 
@@ -22,6 +23,7 @@ export default async function ClassesPage({ searchParams }: { searchParams: Prom
     year ? supabase.from("sections").select("*").eq("academic_year_id", year.id) : Promise.resolve({ data: [] }),
     supabase.rpc("staff_directory"),
   ]);
+  const counts = year ? await studentCountsBySection(supabase, year.id) : new Map<string, number>();
   const staffName = new Map((staff ?? []).map((s) => [s.id, s.full_name]));
   const classById = new Map((classes ?? []).map((c) => [c.id, c]));
 
@@ -30,7 +32,7 @@ export default async function ClassesPage({ searchParams }: { searchParams: Prom
     className: classById.get(s.class_id)?.name ?? "—",
     classOrder: classById.get(s.class_id)?.sort_order ?? 0,
     classTeacher: s.class_teacher_id ? (staffName.get(s.class_teacher_id) ?? null) : null,
-    students: null, // filled in by the Students module
+    students: counts.get(s.id) ?? 0,
   }));
   const classRows: ClassRow[] = (classes ?? []).map((c) => ({
     ...c,

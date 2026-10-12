@@ -57,6 +57,7 @@ const ADMIN_ONLY = [
   "records.delete",
   "audit.view",
   "students.govExport",
+  "students.status",
   "leave.approve",
 ] as const;
 

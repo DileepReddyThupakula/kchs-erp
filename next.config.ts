@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   // Lets a second dev server (e.g. Claude's preview) use its own build folder
   // so it never clobbers yours. Default stays ".next".
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  experimental: {
+    // student photo (2 MB) + documents (5 MB each) are uploaded with the form
+    serverActions: { bodySizeLimit: "25mb" },
+  },
   images: {
     // School logo uploaded in Settings lives in Supabase Storage (public "branding" bucket)
     remotePatterns: supabaseHost

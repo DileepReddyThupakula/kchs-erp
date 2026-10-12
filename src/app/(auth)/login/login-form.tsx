@@ -1,20 +1,27 @@
 "use client";
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import { Eye, EyeOff, Lock, LogIn, Mail } from "lucide-react";
 import { signIn } from "@/features/auth/actions";
 import { IconInput } from "@/components/ui/form";
-import { SubmitButton } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { initialActionState } from "@/lib/utils";
 
 const glassInput =
   "border-white/20 bg-white/90 text-navy-900 focus:border-gold-400 focus:ring-gold-400/40 placeholder:text-ink-muted/70";
 
 export function LoginForm() {
-  const [state, action] = useActionState(signIn, initialActionState);
+  const [state, action, pending] = useActionState(signIn, initialActionState);
   const [show, setShow] = useState(false);
 
   return (
-    <form action={action} className="space-y-4">
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        startTransition(() => action(fd));
+      }}
+    >
       <div className="space-y-1.5">
         <label htmlFor="email" className="text-sm font-medium text-cream-100">
           Email
@@ -65,9 +72,9 @@ export function LoginForm() {
           {state.error}
         </p>
       )}
-      <SubmitButton variant="accent" size="lg" className="w-full" pendingText="Signing in…">
-        <LogIn className="size-4" aria-hidden /> Sign in
-      </SubmitButton>
+      <Button type="submit" variant="accent" size="lg" className="w-full" loading={pending}>
+        {!pending && <LogIn className="size-4" aria-hidden />} {pending ? "Signing in…" : "Sign in"}
+      </Button>
     </form>
   );
 }

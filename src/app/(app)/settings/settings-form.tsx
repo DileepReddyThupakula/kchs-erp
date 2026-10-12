@@ -1,8 +1,8 @@
 "use client";
-import { useActionState } from "react";
+import { startTransition, useActionState } from "react";
 import { updateSettings, uploadBrandingImage } from "@/features/settings/actions";
 import { Field, FormMessage, Input } from "@/components/ui/form";
-import { SubmitButton } from "@/components/ui/button";
+import { Button, SubmitButton } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { initialActionState } from "@/lib/utils";
 import type { SchoolSettings } from "@/types/database";
@@ -10,7 +10,7 @@ import type { SchoolSettings } from "@/types/database";
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function SettingsForm({ settings: s, editable }: { settings: SchoolSettings; editable: boolean }) {
-  const [state, action] = useActionState(updateSettings, initialActionState);
+  const [state, action, pending] = useActionState(updateSettings, initialActionState);
   const fe = state.fieldErrors ?? {};
   const text = (name: keyof SchoolSettings, label: string, hint?: string) => (
     <Field label={label} name={name} hint={hint} errors={fe[name]}>
@@ -19,7 +19,14 @@ export function SettingsForm({ settings: s, editable }: { settings: SchoolSettin
   );
 
   return (
-    <form action={action} className="space-y-4">
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        startTransition(() => action(fd));
+      }}
+    >
       <Card className="grid gap-4 sm:grid-cols-2">
         <h2 className="font-medium sm:col-span-2">School</h2>
         {text("name", "School name")}
@@ -74,7 +81,9 @@ export function SettingsForm({ settings: s, editable }: { settings: SchoolSettin
       </Card>
       {editable && (
         <div className="flex items-center gap-3">
-          <SubmitButton>Save settings</SubmitButton>
+          <Button type="submit" loading={pending}>
+            {pending ? "Saving…" : "Save settings"}
+          </Button>
           <FormMessage state={state} />
         </div>
       )}

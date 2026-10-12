@@ -1,11 +1,11 @@
 "use client";
-import { useActionState, useEffect, useRef, useTransition } from "react";
+import { startTransition, useActionState, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Save, Trash2 } from "lucide-react";
 import { initialActionState, type ActionState, cn } from "@/lib/utils";
 import { FormMessage } from "./form";
-import { Button, SubmitButton } from "./button";
+import { Button } from "./button";
 import { ConfirmDialog } from "./dialog";
 
 type Action = (state: ActionState, fd: FormData) => Promise<ActionState>;
@@ -48,16 +48,23 @@ export function ActionForm({
   onCancel?: () => void;
   children: (fieldErrors: Record<string, string[] | undefined>) => React.ReactNode;
 }) {
-  const [state, formAction] = useActionState(action, initialActionState);
+  const [state, formAction, pending] = useActionState(action, initialActionState);
   const ref = useRef<HTMLFormElement>(null);
   useResultToast(state, onSuccess);
   useEffect(() => {
     if (state.ok && resetOnSuccess) ref.current?.reset();
   }, [state, resetOnSuccess]);
+  // Submit via a handler (not the form `action` prop) so React doesn't clear
+  // what the user typed when the server returns validation errors.
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    startTransition(() => formAction(fd));
+  };
 
   if (layout === "drawer") {
     return (
-      <form ref={ref} action={formAction} className="flex h-full flex-col">
+      <form ref={ref} onSubmit={onSubmit} className="flex h-full flex-col">
         <div className={cn("flex-1 space-y-6 overflow-y-auto px-5 py-5", className)}>{children(state.fieldErrors ?? {})}</div>
         <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-border bg-cream-50/95 px-5 py-3 backdrop-blur">
           <FormMessage state={state.ok ? {} : state} />
@@ -67,9 +74,9 @@ export function ActionForm({
                 Cancel
               </Button>
             )}
-            <SubmitButton>
-              <Save className="size-4" aria-hidden /> {submitLabel}
-            </SubmitButton>
+            <Button type="submit" loading={pending}>
+              {!pending && <Save className="size-4" aria-hidden />} {pending ? "Saving…" : submitLabel}
+            </Button>
           </div>
         </div>
       </form>
@@ -77,10 +84,12 @@ export function ActionForm({
   }
 
   return (
-    <form ref={ref} action={formAction} className={className}>
+    <form ref={ref} onSubmit={onSubmit} className={className}>
       {children(state.fieldErrors ?? {})}
       <div className="flex flex-wrap items-center gap-3 sm:col-span-full">
-        <SubmitButton>{submitLabel}</SubmitButton>
+        <Button type="submit" loading={pending}>
+          {pending ? "Saving…" : submitLabel}
+        </Button>
         <FormMessage state={state} />
       </div>
     </form>

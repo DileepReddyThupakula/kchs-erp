@@ -306,6 +306,8 @@ export type Database = {
       public_branding: { Args: never; Returns: { logo_path: string; name: string; short_name: string; motto: string | null }[] };
       set_student_secure_value: { Args: { p_student_id: string; p_field_key: string; p_value: string }; Returns: undefined };
       reveal_student_secure_values: { Args: { p_student_id: string }; Returns: { field_key: string; label: string; value: string }[] };
+      save_student: { Args: { p: Json }; Returns: string };
+      export_student_ids: { Args: { p_ids: string[] }; Returns: { student_id: string; field_key: string; value: string }[] };
       staff_directory: {
         Args: never;
         Returns: { id: string; full_name: string; designation: string; department: string; status: string }[];

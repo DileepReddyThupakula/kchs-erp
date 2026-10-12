@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { CurrentStaff } from "@/lib/auth/session";
+import { studentCountsBySection } from "@/features/students/queries";
 
 export type MyClassRow = {
   sectionId: string;
@@ -29,7 +30,8 @@ export async function getMyClasses(me: CurrentStaff, yearId: string): Promise<My
   if (!sections?.length) return [];
 
   const subjectIds = [...new Set((mine ?? []).map((a) => a.subject_id))];
-  const [{ data: classes }, { data: subjects }] = await Promise.all([
+  const [counts, { data: classes }, { data: subjects }] = await Promise.all([
+    studentCountsBySection(supabase, yearId),
     supabase.from("classes").select("id, name, sort_order").in("id", [...new Set(sections.map((s) => s.class_id))]),
     subjectIds.length ? supabase.from("subjects").select("id, name, sort_order").in("id", subjectIds) : Promise.resolve({ data: [] }),
   ]);
@@ -50,7 +52,7 @@ export async function getMyClasses(me: CurrentStaff, yearId: string): Promise<My
         .filter((x): x is { id: string; name: string; sort_order: number } => !!x)
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((x) => x.name),
-      students: null, // filled in by the Students module
+      students: counts.get(s.id) ?? 0,
     }))
     .sort((a, b) => a.classOrder - b.classOrder || a.section.localeCompare(b.section));
 }
