@@ -42,6 +42,7 @@ export const DUTY_INFO: Record<Duty, { label: string; help: string }> = {
 
 /** Always Admin only, whatever duties a teacher has. */
 const ADMIN_ONLY = [
+  "setup.view",
   "settings.edit",
   "setup.edit",
   "assignments.edit",

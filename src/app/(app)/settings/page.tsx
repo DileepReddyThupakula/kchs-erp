@@ -16,6 +16,7 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader
+        breadcrumbs={[{ label: "Administration" }, { label: "School settings" }]}
         title="School settings"
         icon={<Settings />}
         description={editable ? "School details used across the ERP, receipts and report cards." : "Only the Admin can change these."}

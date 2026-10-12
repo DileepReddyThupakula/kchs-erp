@@ -262,3 +262,26 @@ export async function deleteAssignment(fd: FormData): Promise<void> {
   if (error) throw new Error(friendlyDbError(error));
   revalidatePath("/setup/assignments", "layout");
 }
+
+// ---------------------------------------------------------------- bulk
+/** Set the medium of several sections at once (Admin). */
+export async function setSectionsMedium(ids: string[], medium: string | null): Promise<ActionState> {
+  await requireCapability("setup.edit");
+  const parsed = z.array(uuid).min(1).safeParse(ids);
+  if (!parsed.success) return { error: "Pick at least one section." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("sections").update({ medium }).in("id", parsed.data);
+  if (error) return { error: friendlyDbError(error) };
+  return done("/setup/classes", `Medium updated for ${parsed.data.length} section(s).`);
+}
+
+/** Remove several teacher assignments at once (Admin). */
+export async function deleteAssignments(ids: string[]): Promise<ActionState> {
+  await requireCapability("assignments.edit");
+  const parsed = z.array(uuid).min(1).safeParse(ids);
+  if (!parsed.success) return { error: "Pick at least one assignment." };
+  const supabase = await createClient();
+  const { error, count } = await supabase.from("teacher_assignments").delete({ count: "exact" }).in("id", parsed.data);
+  if (error) return { error: friendlyDbError(error) };
+  return done("/setup/assignments", `Removed ${count ?? parsed.data.length} assignment(s).`);
+}

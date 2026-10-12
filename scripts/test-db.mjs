@@ -2,7 +2,7 @@
 // transaction that is ALWAYS rolled back, so the database is left untouched.
 //   npm run test:db            -> all files
 //   npm run test:db -- 01      -> files whose name contains "01"
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
 
@@ -45,6 +45,32 @@ for (const file of files) {
   }
 }
 await client.end();
+
+// API tests: tests/api/*.mjs (sign in as demo users through Supabase, read-only)
+const apiDir = join(import.meta.dirname, "..", "tests", "api");
+const apiFiles = existsSync(apiDir) ? readdirSync(apiDir).filter((f) => f.endsWith(".mjs") && f.includes(filter)).sort() : [];
+for (const file of apiFiles) {
+  const mod = await import(join(apiDir, file));
+  console.log(`\n# api/${file}: ${mod.name ?? ""}`);
+  let n = 0;
+  try {
+    await mod.default({
+      ok(cond, description, detail) {
+        n++;
+        total++;
+        if (!cond) failed++;
+        console.log(`${cond ? "ok" : "not ok"} ${n} - ${description}${!cond && detail ? `  # ${detail}` : ""}`);
+      },
+      skip(reason) {
+        console.log(`# SKIPPED: ${reason}`);
+      },
+    });
+  } catch (e) {
+    failed++;
+    total++;
+    console.log(`not ok - api/${file} crashed: ${e.message}`);
+  }
+}
 
 console.log(`\n${total - failed}/${total} passed`);
 process.exit(failed ? 1 : 0);

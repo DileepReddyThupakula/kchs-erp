@@ -46,9 +46,19 @@ export async function requireStaff(): Promise<CurrentStaff> {
   return me;
 }
 
-/** For server actions / pages: throws (or redirects) unless the capability is held. */
+/**
+ * For server actions / pages: unless the capability is held, go to the
+ * not-allowed page. Call this BEFORE loading any data, so nothing leaks.
+ */
 export async function requireCapability(capability: Capability): Promise<CurrentStaff> {
   const me = await requireStaff();
-  if (!can(me, capability)) redirect("/dashboard?error=forbidden");
+  if (!can(me, capability)) redirect("/not-allowed");
+  return me;
+}
+
+/** Teacher-only pages ("My classes" etc.). Admin uses the full setup pages. */
+export async function requireTeacher(): Promise<CurrentStaff> {
+  const me = await requireStaff();
+  if (me.role !== "teacher") redirect("/not-allowed");
   return me;
 }

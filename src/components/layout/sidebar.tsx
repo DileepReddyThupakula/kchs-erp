@@ -20,7 +20,10 @@ export function Sidebar({ perms, shortName, logoUrl }: { perms: Permissions; sho
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const groups = NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.cap || can(perms, i.cap)) })).filter(
+  const groups = NAV.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => (i.teacherOnly ? perms.role === "teacher" : !i.cap || can(perms, i.cap))),
+  })).filter(
     (g) => g.items.length,
   );
 

@@ -1,26 +1,33 @@
 import { ClipboardList } from "lucide-react";
-import { requireStaff } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getAcademicYears, resolveYear } from "@/lib/settings";
-import { Badge, Card, EmptyState, PageHeader, Table } from "@/components/ui/card";
+import { EmptyState, PageHeader } from "@/components/ui/card";
 import { YearPicker } from "@/components/ui/year-picker";
-import { ConfirmButton } from "@/components/ui/action-form";
-import { deleteAssignment } from "@/features/setup/actions";
-import { AssignmentForm } from "./assignment-form";
+import { AssignmentsTable, type AssignmentRow } from "./assignments-table";
 
 export const metadata = { title: "Teacher assignments" };
 
 export default async function AssignmentsPage({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
   const { year: yearParam } = await searchParams;
-  const me = await requireStaff();
+  const me = await requireCapability("setup.view"); // Admin only: teachers use "My classes"
   const editable = can(me, "assignments.edit");
   const supabase = await createClient();
   const [years, year] = await Promise.all([getAcademicYears(), resolveYear(yearParam)]);
+  const header = (
+    <PageHeader
+      breadcrumbs={[{ label: "School setup" }, { label: "Teacher assignments" }]}
+      icon={<ClipboardList />}
+      title={me.role === "teacher" ? "My classes & subjects" : "Teacher assignments"}
+      description={me.role === "teacher" ? "The sections and subjects you teach." : "Which teacher teaches which subject in each section."}
+      actions={<YearPicker years={years} value={year?.id} />}
+    />
+  );
   if (!year) {
     return (
       <>
-        <PageHeader icon={<ClipboardList />} title="Teacher assignments" />
+        {header}
         <EmptyState title="No academic year yet">Create an academic year and its sections first.</EmptyState>
       </>
     );
@@ -28,99 +35,59 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
 
   const [{ data: classes }, { data: sections }, { data: subjects }, { data: links }, { data: staff }] = await Promise.all([
     supabase.from("classes").select("id, name, sort_order").order("sort_order"),
-    supabase.from("sections").select("id, name, class_id, class_teacher_id").eq("academic_year_id", year.id).order("name"),
+    supabase.from("sections").select("id, name, class_id, class_teacher_id").eq("academic_year_id", year.id),
     supabase.from("subjects").select("id, name, sort_order").order("sort_order"),
     supabase.from("class_subjects").select("class_id, subject_id").eq("academic_year_id", year.id),
     supabase.rpc("staff_directory"),
   ]);
   const sectionIds = (sections ?? []).map((s) => s.id);
+  // RLS already limits teachers to the sections they teach (scope rule).
   const { data: assignments } = sectionIds.length
     ? await supabase.from("teacher_assignments").select("*").in("section_id", sectionIds)
     : { data: [] };
 
-  const className = new Map((classes ?? []).map((c) => [c.id, c.name]));
-  const classOrder = new Map((classes ?? []).map((c) => [c.id, c.sort_order]));
-  const subjectName = new Map((subjects ?? []).map((s) => [s.id, s.name]));
+  const classById = new Map((classes ?? []).map((c) => [c.id, c]));
+  const sectionById = new Map((sections ?? []).map((s) => [s.id, s]));
+  const subjectById = new Map((subjects ?? []).map((s) => [s.id, s]));
   const staffName = new Map((staff ?? []).map((s) => [s.id, s.full_name]));
 
+  const rows: AssignmentRow[] = (assignments ?? []).map((a) => {
+    const sec = sectionById.get(a.section_id)!;
+    const cls = classById.get(sec.class_id);
+    return {
+      id: a.id,
+      sectionId: a.section_id,
+      classId: sec.class_id,
+      className: cls?.name ?? "—",
+      classOrder: cls?.sort_order ?? 0,
+      section: sec.name,
+      subjectId: a.subject_id,
+      subject: subjectById.get(a.subject_id)?.name ?? "—",
+      subjectOrder: subjectById.get(a.subject_id)?.sort_order ?? 0,
+      staffId: a.staff_id,
+      teacher: staffName.get(a.staff_id) ?? "—",
+      isClassTeacher: sec.class_teacher_id === a.staff_id,
+      periods: a.periods_per_week,
+      mine: a.staff_id === me.staffId,
+    };
+  });
   const orderedSections = [...(sections ?? [])].sort(
-    (a, b) => (classOrder.get(a.class_id) ?? 0) - (classOrder.get(b.class_id) ?? 0) || a.name.localeCompare(b.name),
+    (a, b) => (classById.get(a.class_id)?.sort_order ?? 0) - (classById.get(b.class_id)?.sort_order ?? 0) || a.name.localeCompare(b.name),
   );
-  // Teachers only see sections they teach (RLS returns only those assignments).
-  const visibleSections =
-    me.role === "teacher"
-      ? orderedSections.filter((s) => s.class_teacher_id === me.staffId || assignments?.some((a) => a.section_id === s.id))
-      : orderedSections;
 
   return (
     <>
-      <PageHeader
-        icon={<ClipboardList />}
-        title="Teacher assignments"
-        description={me.role === "teacher" ? "The sections and subjects you teach." : "Which teacher teaches which subject in each section."}
-        actions={<YearPicker years={years} value={year.id} />}
+      {header}
+      <AssignmentsTable
+        rows={rows}
+        editable={editable}
+        yearName={year.name}
+        sections={orderedSections.map((s) => ({ id: s.id, label: `${classById.get(s.class_id)?.name} – ${s.name}`, classId: s.class_id }))}
+        classes={(classes ?? []).map((c) => ({ id: c.id, name: c.name }))}
+        subjects={(subjects ?? []).map((s) => ({ id: s.id, name: s.name }))}
+        classSubjects={links ?? []}
+        teachers={(staff ?? []).filter((s) => s.status === "active").map((s) => ({ id: s.id, name: s.full_name, designation: s.designation }))}
       />
-      {editable && (
-        <Card className="mb-6">
-          <h2 className="mb-3 font-semibold text-navy-900">Assign a teacher</h2>
-          <AssignmentForm
-            sections={orderedSections.map((s) => ({ id: s.id, label: `${className.get(s.class_id)} – ${s.name}`, class_id: s.class_id }))}
-            classSubjects={links ?? []}
-            subjects={subjects ?? []}
-            teachers={(staff ?? []).filter((s) => s.status === "active")}
-          />
-        </Card>
-      )}
-      {visibleSections.length === 0 && (
-        <EmptyState title={`No sections for ${year.name}`}>
-          {me.role === "teacher" ? "You haven't been assigned to any section yet. The Admin can assign you." : "Add sections in Setup → Classes & sections first."}
-        </EmptyState>
-      )}
-      <div className="space-y-4">
-        {visibleSections.map((s) => {
-          const rows = (assignments ?? [])
-            .filter((a) => a.section_id === s.id)
-            .sort((a, b) => (subjectName.get(a.subject_id) ?? "").localeCompare(subjectName.get(b.subject_id) ?? ""));
-          return (
-            <div key={s.id}>
-              <h2 className="mb-2 font-semibold text-navy-900">
-                {className.get(s.class_id)} – {s.name}
-                <span className="ml-2 text-sm font-normal text-muted">
-                  Class teacher: {s.class_teacher_id ? staffName.get(s.class_teacher_id) : "not set"}
-                </span>
-              </h2>
-              {rows.length ? (
-                <Table>
-                  <thead>
-                    <tr>
-                      <th>Subject</th>
-                      <th>Teacher</th>
-                      <th>Periods / week</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((a) => (
-                      <tr key={a.id}>
-                        <td>{subjectName.get(a.subject_id)}</td>
-                        <td>
-                          {staffName.get(a.staff_id)} {a.staff_id === me.staffId && <Badge tone="gold">You</Badge>}
-                        </td>
-                        <td>{a.periods_per_week ?? "—"}</td>
-                        <td className="text-right">
-                          {editable && <ConfirmButton action={deleteAssignment} id={a.id} label="Remove" doneText="Assignment removed." confirmText="Remove this assignment?" />}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              ) : (
-                <EmptyState>No subjects assigned yet.{editable ? " Use the form above to assign a teacher." : ""}</EmptyState>
-              )}
-            </div>
-          );
-        })}
-      </div>
     </>
   );
 }

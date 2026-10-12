@@ -4,11 +4,10 @@ import { requireCapability } from "@/lib/auth/session";
 import { can, DUTY_INFO, type Duty } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils";
-import { Card, PageHeader, RoleBadge } from "@/components/ui/card";
-import { StaffForm } from "../staff-form";
+import { Badge, Card, PageHeader, RoleBadge, StatusChip } from "@/components/ui/card";
+import { EditDetailsButton } from "./edit-details";
 import { LoginPanel } from "./login-panel";
 import { DutiesPanel } from "./duties-panel";
-import { Badge } from "@/components/ui/card";
 
 export default async function StaffDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,13 +23,21 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
 
   return (
     <>
-      <PageHeader icon={<UserRound />} title={s.full_name} description={`${s.employee_code} · ${s.designation ?? "No designation"}`} />
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <PageHeader
+        breadcrumbs={[{ label: "People" }, { label: "Staff", href: "/staff" }, { label: s.full_name }]}
+        icon={<UserRound />}
+        title={s.full_name}
+        description={`${s.employee_code} · ${s.designation ?? "No designation"}`}
+        actions={editable && <EditDetailsButton staff={s} />}
+      />
+      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <Card>
-          {editable ? (
-            <StaffForm staff={s} />
-          ) : (
-            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-semibold text-navy-900">Details</h2>
+            <StatusChip status={s.status} />
+          </div>
+          {(
+            <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
               {(
                 [
                   ["Gender", s.gender],
@@ -40,13 +47,13 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
                   ["Department", s.department],
                   ["Qualification", s.qualification],
                   ["Date of joining", formatDate(s.date_of_joining)],
-                  ["Status", s.status],
+                  ["Designation", s.designation],
                   ["Address", s.address],
                 ] as const
               ).map(([k, v]) => (
                 <div key={k}>
-                  <dt className="text-muted">{k}</dt>
-                  <dd className="capitalize">{v || "—"}</dd>
+                  <dt className="text-xs text-muted">{k}</dt>
+                  <dd className={k === "Gender" ? "capitalize" : undefined}>{v || "—"}</dd>
                 </div>
               ))}
             </dl>

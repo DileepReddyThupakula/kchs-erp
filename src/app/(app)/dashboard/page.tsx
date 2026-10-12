@@ -2,8 +2,11 @@ import Link from "next/link";
 import {
   ArrowRight,
   BookOpen,
+  CalendarClock,
   CalendarDays,
   CheckCircle2,
+  GraduationCap,
+  PartyPopper,
   Circle,
   ClipboardList,
   School,
@@ -17,6 +20,8 @@ import { can, DUTY_INFO, type Capability } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getSchoolSettings, resolveYear } from "@/lib/settings";
 import { detailsChecklist } from "@/features/settings/missing";
+import { getMyClasses } from "@/features/my/queries";
+import { formatDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -32,14 +37,16 @@ function greeting(timezone: string) {
 /** Shown when the person holds `cap` (no cap = everyone); `teacherOnly` = teachers only. */
 type Action = { href: string; label: string; icon: LucideIcon; cap?: Capability; teacherOnly?: boolean };
 const QUICK_ACTIONS: Action[] = [
-  { href: "/staff/new", label: "Add staff member", icon: UserPlus, cap: "staff.edit" },
+  { href: "/staff?new=1", label: "Add staff member", icon: UserPlus, cap: "staff.edit" },
   { href: "/setup/academic-years", label: "Holidays & years", icon: CalendarDays, cap: "setup.edit" },
   { href: "/setup/assignments", label: "Assign teachers", icon: ClipboardList, cap: "assignments.edit" },
   { href: "/settings", label: "School settings", icon: Settings, cap: "settings.edit" },
-  { href: "/setup/assignments", label: "My classes & subjects", icon: ClipboardList, teacherOnly: true },
-  { href: "/setup/academic-years", label: "Holiday list", icon: CalendarDays, teacherOnly: true },
-  { href: "/setup/subjects", label: "Subjects", icon: BookOpen, teacherOnly: true },
+  { href: "/my/classes", label: "My classes", icon: School, teacherOnly: true },
+  { href: "/my/timetable", label: "My timetable", icon: CalendarClock, teacherOnly: true },
+  { href: "/my/holidays", label: "Holiday list", icon: CalendarDays, teacherOnly: true },
 ];
+
+type Stat = { label: string; value: number | string; icon: LucideIcon; accent: keyof typeof ACCENTS; href?: string; hint?: string };
 
 const ACCENTS = {
   navy: "bg-navy-100 text-navy-700",
@@ -54,26 +61,46 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const supabase = await createClient();
   const [settings, year] = await Promise.all([getSchoolSettings(), resolveYear()]);
 
-  const [classes, sections, subjects, staff] = await Promise.all([
-    supabase.from("classes").select("id", { count: "exact", head: true }).eq("is_active", true),
-    year
-      ? supabase.from("sections").select("id", { count: "exact", head: true }).eq("academic_year_id", year.id)
-      : Promise.resolve({ count: 0 }),
-    supabase.from("subjects").select("id", { count: "exact", head: true }).eq("is_active", true),
-    supabase.rpc("staff_directory"),
-  ]);
-  const activeStaff = (staff.data ?? []).filter((s) => s.status === "active").length;
   const checklist = can(me, "settings.edit") ? detailsChecklist(settings) : [];
   const actions = QUICK_ACTIONS.filter((a) => (a.teacherOnly ? me.role === "teacher" : !a.cap || can(me, a.cap)));
+  const stats = me.role === "teacher" ? await teacherStats() : await schoolStats();
+
+  // Teachers see their own numbers only (scope rule R18).
+  async function teacherStats(): Promise<Stat[]> {
+    const mine = year ? await getMyClasses(me, year.id) : [];
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: next } = year
+      ? await supabase.from("holidays").select("date, name").eq("academic_year_id", year.id).gte("date", today).order("date").limit(1).maybeSingle()
+      : { data: null };
+    return [
+      { label: "My classes", value: mine.length, icon: School, accent: "navy", href: "/my/classes" },
+      { label: "My subjects", value: new Set(mine.flatMap((m) => m.subjects)).size, icon: BookOpen, accent: "green", href: "/my/classes" },
+      { label: "My students", value: "—", icon: GraduationCap, accent: "gold", hint: "With the Students module" },
+      { label: next ? `Next holiday · ${next.name}` : "Next holiday", value: next ? formatDate(next.date) : "—", icon: PartyPopper, accent: "cream", href: "/my/holidays" },
+    ];
+  }
+
+  async function schoolStats(): Promise<Stat[]> {
+    const [classes, sections, subjects, staff] = await Promise.all([
+      supabase.from("classes").select("id", { count: "exact", head: true }).eq("is_active", true),
+      year
+        ? supabase.from("sections").select("id", { count: "exact", head: true }).eq("academic_year_id", year.id)
+        : Promise.resolve({ count: 0 }),
+      supabase.from("subjects").select("id", { count: "exact", head: true }).eq("is_active", true),
+      supabase.rpc("staff_directory"),
+    ]);
+    const activeStaff = (staff.data ?? []).filter((s) => s.status === "active").length;
+    const setup = can(me, "setup.view");
+    return [
+      { label: "Classes", value: classes.count ?? 0, icon: School, accent: "navy", href: setup ? "/setup/classes?tab=classes" : undefined },
+      { label: `Sections ${year ? year.name : ""}`, value: sections.count ?? 0, icon: ClipboardList, accent: "gold", href: setup ? "/setup/classes" : undefined },
+      { label: "Subjects", value: subjects.count ?? 0, icon: BookOpen, accent: "green", href: setup ? "/setup/subjects" : undefined },
+      { label: "Active staff", value: activeStaff, icon: Users, accent: "cream", href: can(me, "staff.viewAll") ? "/staff" : undefined },
+    ];
+  }
   const remaining = checklist.filter((c) => !c.done).length;
   const firstName = me.fullName.split(" ")[0];
 
-  const stats: { label: string; value: number; icon: LucideIcon; accent: keyof typeof ACCENTS }[] = [
-    { label: "Classes", value: classes.count ?? 0, icon: School, accent: "navy" },
-    { label: `Sections ${year ? year.name : ""}`, value: sections.count ?? 0, icon: ClipboardList, accent: "gold" },
-    { label: "Subjects", value: subjects.count ?? 0, icon: BookOpen, accent: "green" },
-    { label: "Active staff", value: activeStaff, icon: Users, accent: "cream" },
-  ];
 
   return (
     <>
@@ -92,17 +119,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {stats.map(({ label, value, icon: Icon, accent }) => (
-          <Card key={label} className="flex items-center gap-3 transition-shadow hover:shadow-[var(--shadow-lift)]">
-            <span className={cn("grid size-11 shrink-0 place-items-center rounded-xl", ACCENTS[accent])}>
-              <Icon className="size-5" aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <p className="text-2xl font-semibold tabular-nums text-navy-900">{value}</p>
-              <p className="truncate text-xs text-muted sm:text-sm">{label}</p>
-            </div>
-          </Card>
-        ))}
+        {stats.map(({ label, value, icon: Icon, accent, href, hint }) => {
+          const body = (
+            <Card className={cn("flex h-full items-center gap-3", href && "transition-[box-shadow,border-color] group-hover:border-gold-300 group-hover:shadow-[var(--shadow-lift)]")}>
+              <span className={cn("grid size-11 shrink-0 place-items-center rounded-xl", ACCENTS[accent])}>
+                <Icon className="size-5" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-2xl font-semibold tabular-nums text-navy-900">{value}</p>
+                <p className="truncate text-xs text-muted sm:text-sm">{label}</p>
+                {hint && <p className="truncate text-[11px] text-ink-muted/80">{hint}</p>}
+              </div>
+              {href && <ArrowRight className="size-4 shrink-0 text-navy-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gold-700" aria-hidden />}
+            </Card>
+          );
+          return href ? (
+            <Link key={label} href={href} className="group rounded-[var(--radius-card)]" aria-label={`${label}: ${value}. Open`}>
+              {body}
+            </Link>
+          ) : (
+            <div key={label}>{body}</div>
+          );
+        })}
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_22rem]">

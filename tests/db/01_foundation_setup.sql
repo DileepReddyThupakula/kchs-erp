@@ -103,20 +103,22 @@ select pg_temp.counts('select count(*) from public.audit_logs', 0, 'computer sta
 select pg_temp.login_as('00000000-0000-4000-a000-000000000003');
 select pg_temp.counts('select count(*) from public.school_settings', 1, 'teacher: reads settings');
 select pg_temp.affects($$update public.school_settings set city = 'Hacked' where id = 1$$, 0, 'teacher: cannot edit settings');
-select pg_temp.counts($$select count(*) from public.sections where academic_year_id = '20000000-0000-4000-a000-000000000001'$$, 4, 'teacher: views sections');
+-- scope rule (R18): teacher1 is class teacher of A and teaches Maths in A only
+select pg_temp.counts($$select count(*) from public.sections where academic_year_id = '20000000-0000-4000-a000-000000000001'$$, 1, 'teacher: sees only own sections (class teacher / assigned)');
 select pg_temp.throws($$insert into public.classes (name) values ('TEST T Class')$$, 'teacher: cannot create class', '42501');
 select pg_temp.affects($$delete from public.holidays where academic_year_id = '20000000-0000-4000-a000-000000000001'$$, 0, 'teacher: cannot delete holidays');
 select pg_temp.throws($$insert into public.teacher_assignments (staff_id, section_id, subject_id) values ('10000000-0000-4000-a000-000000000003', '31000000-0000-4000-a000-000000000002', '40000000-0000-4000-a000-000000000002')$$, 'teacher: cannot assign self', '42501');
-select pg_temp.counts($$select count(*) from public.teacher_assignments where section_id = '31000000-0000-4000-a000-000000000001'$$, 2, 'teacher1 (class teacher of A): sees assignments of A');
+select pg_temp.counts($$select count(*) from public.teacher_assignments where section_id = '31000000-0000-4000-a000-000000000001'$$, 1, 'teacher1 (class teacher of A): sees only own assignment in A, not colleagues''');
 select pg_temp.counts($$select count(*) from public.teacher_assignments where section_id = '31000000-0000-4000-a000-000000000002'$$, 0, 'teacher1: does not see assignments of B');
 select pg_temp.counts($$select count(*) from public.staff where employee_code like 'TEST-%'$$, 1, 'teacher: sees only own staff record');
 select pg_temp.affects($$update public.staff set phone = '9999999999' where employee_code = 'TEST-T1'$$, 0, 'teacher: cannot edit own staff record');
-select pg_temp.counts($$select count(*) from public.staff_directory() where full_name like 'Test %'$$, 4, 'teacher: staff directory lists colleagues (names only)');
+select pg_temp.counts($$select count(*) from public.staff_directory() where full_name like 'Test %'$$, 1, 'teacher: staff directory shows self + own sections'' class teachers only');
 select pg_temp.counts('select count(*) from public.audit_logs', 0, 'teacher: cannot read audit log');
 select pg_temp.lives($$select public.log_event('test.event', null, null, '{"k":1}')$$, 'teacher: can record an app event');
 
 select pg_temp.login_as('00000000-0000-4000-a000-000000000004');
-select pg_temp.counts($$select count(*) from public.teacher_assignments where section_id in ('31000000-0000-4000-a000-000000000001', '31000000-0000-4000-a000-000000000002')$$, 3, 'teacher2: sees assignments of both sections taught');
+select pg_temp.counts($$select count(*) from public.teacher_assignments where section_id in ('31000000-0000-4000-a000-000000000001', '31000000-0000-4000-a000-000000000002')$$, 2, 'teacher2: sees own assignments in both sections taught');
+select pg_temp.counts($$select count(*) from public.staff_directory() where full_name like 'Test %'$$, 2, 'teacher2: directory shows self + class teacher of a section they teach');
 
 -- =====================================================================
 -- NO ROLE / INACTIVE / ANON
