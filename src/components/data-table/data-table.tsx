@@ -39,6 +39,8 @@ export type Column<T> = {
   defaultHidden?: boolean;
   align?: "left" | "right" | "center";
   className?: string;
+  /** Pin to the left edge (after the checkbox) when the table scrolls sideways. Moved to the front so it never covers another column. */
+  pinned?: "left";
 };
 
 export type FilterDef<T> = {
@@ -187,7 +189,13 @@ export function DataTable<T>({
       return next;
     });
 
-  const visible = columns.filter((c) => !hidden.includes(c.id));
+  // pinned column first (right after the checkbox), so sticky never overlaps others
+  const visible = columns.filter((c) => !hidden.includes(c.id)).sort((a, b) => Number(b.pinned === "left") - Number(a.pinned === "left"));
+  const pinnedId = visible[0]?.pinned === "left" ? visible[0].id : null;
+  const edge = "shadow-[1px_0_0_var(--color-line)]";
+  // checkbox column: fixed 40px wide so the pinned column can sit at left: 2.5rem
+  const checkCls = cn("sticky left-0 w-10 min-w-10 max-w-10 px-3", !pinnedId && edge);
+  const pinCls = (id: string) => (id === pinnedId ? cn("sticky", selectable ? "left-10" : "left-0", edge) : "");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -429,7 +437,7 @@ export function DataTable<T>({
               <thead className="sticky top-0 z-10 bg-cream-100 shadow-[0_1px_0_var(--color-line)]">
                 <tr>
                   {selectable && (
-                    <th className="w-10 px-3 py-2">
+                    <th className={cn(checkCls, "z-[2] bg-cream-100 py-2")}>
                       <input
                         type="checkbox"
                         aria-label="Select all on this page"
@@ -454,6 +462,7 @@ export function DataTable<T>({
                         "whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink-muted",
                         c.align === "right" && "text-right",
                         c.align === "center" && "text-center",
+                        c.id === pinnedId && cn(pinCls(c.id), "z-[2] bg-cream-100"),
                       )}
                     >
                       {c.sortValue ? (
@@ -495,12 +504,12 @@ export function DataTable<T>({
                       }
                       className={cn(
                         "group border-t border-border transition-colors hover:bg-cream-50",
-                        isSel && "bg-gold-50/70 hover:bg-gold-50",
+                        isSel && "bg-gold-50 hover:bg-gold-50",
                         clickable && "cursor-pointer",
                       )}
                     >
                       {selectable && (
-                        <td className="px-3 py-1.5" data-row-click-ignore>
+                        <td className={cn(checkCls, "z-[1] py-1.5 transition-colors", isSel ? "bg-gold-50" : "bg-surface group-hover:bg-cream-50")} data-row-click-ignore>
                           <input
                             type="checkbox"
                             aria-label="Select row"
@@ -520,7 +529,13 @@ export function DataTable<T>({
                       {visible.map((c) => (
                         <td
                           key={c.id}
-                          className={cn("px-3 py-1.5 align-middle", c.align === "right" && "text-right", c.align === "center" && "text-center", c.className)}
+                          className={cn(
+                            "px-3 py-1.5 align-middle",
+                            c.align === "right" && "text-right",
+                            c.align === "center" && "text-center",
+                            c.className,
+                            c.id === pinnedId && cn(pinCls(c.id), "z-[1] transition-colors", isSel ? "bg-gold-50" : "bg-surface group-hover:bg-cream-50"),
+                          )}
                         >
                           {c.cell(r)}
                         </td>

@@ -66,7 +66,7 @@ export function AssignmentsTable({
   }
 
   const columns: Column<AssignmentRow>[] = [
-    { id: "class", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.className}</span>, sortValue: (r) => r.classOrder * 100 + r.section.charCodeAt(0), exportValue: (r) => r.className, className: "whitespace-nowrap" },
+    { id: "class", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.className}</span>, sortValue: (r) => r.classOrder * 100 + r.section.charCodeAt(0), exportValue: (r) => r.className, className: "whitespace-nowrap", pinned: "left" },
     { id: "section", header: "Section", cell: (r) => r.section, sortValue: (r) => r.section },
     { id: "subject", header: "Subject", cell: (r) => r.subject, sortValue: (r) => r.subjectOrder, exportValue: (r) => r.subject, className: "whitespace-nowrap" },
     {

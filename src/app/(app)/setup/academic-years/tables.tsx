@@ -50,6 +50,7 @@ export function YearsTable({ rows, editable }: { rows: YearRow[]; editable: bool
       sortValue: (r) => r.start_date,
       exportValue: (r) => r.name,
       className: "whitespace-nowrap",
+      pinned: "left",
     },
     { id: "start", header: "Starts", cell: (r) => formatDate(r.start_date), sortValue: (r) => r.start_date, className: "whitespace-nowrap" },
     { id: "end", header: "Ends", cell: (r) => formatDate(r.end_date), sortValue: (r) => r.end_date, className: "whitespace-nowrap" },
@@ -121,7 +122,7 @@ export function HolidaysTable({ rows, editable, year }: { rows: Holiday[]; edita
   const month = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-IN", { month: "long", year: "numeric" });
   const months = [...new Set(rows.map((r) => r.date.slice(0, 7)))].sort();
   const columns: Column<Holiday>[] = [
-    { id: "date", header: "Date", hideable: false, cell: (r) => <span className="tabular-nums">{formatDate(r.date)}</span>, sortValue: (r) => r.date, className: "whitespace-nowrap" },
+    { id: "date", header: "Date", hideable: false, cell: (r) => <span className="tabular-nums">{formatDate(r.date)}</span>, sortValue: (r) => r.date, className: "whitespace-nowrap", pinned: "left" },
     { id: "day", header: "Day", cell: (r) => weekday(r.date), exportValue: (r) => weekday(r.date) },
     { id: "name", header: "Holiday", cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name },
     { id: "kind", header: "Type", cell: (r) => (r.kind === "second_saturday" ? <Badge tone="gold">Auto · 2nd Saturday</Badge> : <StatusChip status="declared" label="Declared" />), sortValue: (r) => r.kind },

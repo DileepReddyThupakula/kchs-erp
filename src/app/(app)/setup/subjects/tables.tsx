@@ -46,7 +46,7 @@ export function SubjectsTable({ rows, editable }: { rows: SubjectRow[]; editable
       : []),
   ];
   const columns: Column<SubjectRow>[] = [
-    { id: "name", header: "Subject", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name, className: "whitespace-nowrap" },
+    { id: "name", header: "Subject", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name, className: "whitespace-nowrap", pinned: "left" },
     { id: "code", header: "Code", cell: (r) => <span className="font-mono text-xs">{r.code ?? "—"}</span>, sortValue: (r) => r.code ?? "" },
     { id: "type", header: "Type", cell: (r) => <StatusChip status={r.type} label={TYPE_LABEL[r.type]} />, sortValue: (r) => TYPE_LABEL[r.type] },
     { id: "classes", header: "Classes", align: "right", cell: (r) => r.classCount, sortValue: (r) => r.classCount },
@@ -135,7 +135,7 @@ export function ClassSubjectsTable({ rows, editable, yearId, subjects }: { rows:
       <span className="text-muted">None</span>
     );
   const columns: Column<ClassLinkRow>[] = [
-    { id: "class", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.order, exportValue: (r) => r.name, className: "whitespace-nowrap" },
+    { id: "class", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.order, exportValue: (r) => r.name, className: "whitespace-nowrap", pinned: "left" },
     { id: "scholastic", header: "Subjects", cell: (r) => chips(r.scholastic), exportValue: (r) => r.scholastic.join(", ") },
     { id: "co", header: "Co-scholastic", cell: (r) => chips(r.coScholastic), exportValue: (r) => r.coScholastic.join(", "), defaultHidden: true },
     { id: "count", header: "Total", align: "right", cell: (r) => r.links.length, sortValue: (r) => r.links.length },

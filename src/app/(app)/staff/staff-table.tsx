@@ -30,6 +30,7 @@ export function StaffTable({ rows, editable }: { rows: StaffRow[]; editable: boo
       id: "name",
       header: "Name",
       hideable: false,
+      pinned: "left",
       cell: (r) => (
         <Link href={`/staff/${r.id}`} className="font-medium text-navy-800 hover:text-navy-900 hover:underline">
           {r.full_name}

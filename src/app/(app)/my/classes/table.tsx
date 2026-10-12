@@ -18,6 +18,7 @@ export function MyClassesTable({ rows, yearName }: { rows: MyClassRow[]; yearNam
       sortValue: (r) => r.classOrder * 100 + r.section.charCodeAt(0),
       exportValue: (r) => `${r.className} ${r.section}`,
       className: "whitespace-nowrap",
+      pinned: "left",
     },
     { id: "medium", header: "Medium", cell: (r) => (r.medium ? <StatusChip status="declared" label={r.medium} /> : <span className="text-muted">Not set</span>), sortValue: (r) => r.medium ?? "" },
     {

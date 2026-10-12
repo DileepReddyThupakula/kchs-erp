@@ -74,6 +74,7 @@ export function StudentsTable({
       id: "name",
       header: "Student",
       hideable: false,
+      pinned: "left",
       cell: (r) => (
         <Link href={`/students/${r.id}`} className="flex items-center gap-2.5 font-medium text-navy-900 hover:underline">
           <Avatar name={r.full_name} />

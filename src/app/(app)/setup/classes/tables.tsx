@@ -40,7 +40,7 @@ export function SectionsTable({
   const router = useRouter();
 
   const columns: Column<SectionRow>[] = [
-    { id: "class", header: "Class", cell: (r) => <span className="font-medium text-navy-900">{r.className}</span>, sortValue: (r) => r.classOrder, exportValue: (r) => r.className, hideable: false, className: "whitespace-nowrap" },
+    { id: "class", header: "Class", cell: (r) => <span className="font-medium text-navy-900">{r.className}</span>, sortValue: (r) => r.classOrder, exportValue: (r) => r.className, hideable: false, className: "whitespace-nowrap", pinned: "left" },
     { id: "section", header: "Section", cell: (r) => r.name, sortValue: (r) => r.name },
     {
       id: "medium",
@@ -213,7 +213,7 @@ export function ClassesTable({ rows, editable }: { rows: ClassRow[]; editable: b
   ];
   const columns: Column<ClassRow>[] = [
     { id: "order", header: "Order", align: "right", cell: (r) => <span className="tabular-nums text-muted">{r.sort_order}</span>, sortValue: (r) => r.sort_order },
-    { id: "name", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name, className: "whitespace-nowrap" },
+    { id: "name", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name, className: "whitespace-nowrap", pinned: "left" },
     { id: "short", header: "Short name", cell: (r) => r.short_name ?? "—", sortValue: (r) => r.short_name ?? "" },
     { id: "sections", header: "Sections (this year)", align: "right", cell: (r) => r.sectionCount, sortValue: (r) => r.sectionCount },
     { id: "status", header: "Status", cell: (r) => <StatusChip status={r.is_active ? "active" : "inactive"} />, sortValue: (r) => (r.is_active ? "active" : "inactive") },
