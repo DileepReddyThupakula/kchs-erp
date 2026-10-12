@@ -5,6 +5,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { DEMO_CLASS_TEACHERS, DEMO_DUTIES, DEMO_STAFF, DEMO_SUBJECT_TEACHERS } from "./demo-data.mjs";
 import { seedDemoStudents } from "./demo-students.mjs";
+import { seedDemoFees } from "./demo-fees.mjs";
 
 const { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key, DEMO_USER_PASSWORD: password } = process.env;
 for (const [k, v] of Object.entries({ NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key, DEMO_USER_PASSWORD: password })) {
@@ -99,3 +100,6 @@ for (const l of logins) console.log("  -", l);
 
 // ---- demo students (~60, fake IDs)
 await seedDemoStudents();
+
+// ---- demo fee data (plans mix, concession, payments, one cancelled receipt)
+await seedDemoFees();

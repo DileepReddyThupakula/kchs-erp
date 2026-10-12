@@ -16,7 +16,9 @@
     "brand:set-logo": "node --env-file-if-exists=.env.local scripts/set-logo.mjs",
     "db:apply": "node --env-file-if-exists=.env.local scripts/apply-migration.mjs",
     "seed:demo-students": "node --env-file-if-exists=.env.local scripts/demo-students.mjs seed",
-    "wipe:demo-students": "node --env-file-if-exists=.env.local scripts/demo-students.mjs wipe"
+    "wipe:demo-students": "node --env-file-if-exists=.env.local scripts/demo-students.mjs wipe",
+    "seed:demo-fees": "node --env-file-if-exists=.env.local scripts/demo-fees.mjs seed",
+    "wipe:demo-fees": "node --env-file-if-exists=.env.local scripts/demo-fees.mjs wipe"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

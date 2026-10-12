@@ -90,3 +90,38 @@ select y.id, c.id, 'A', 'English'
 from public.classes c
 cross join (select id from public.academic_years where name = '2026-27') y
 on conflict (academic_year_id, class_id, name) do nothing;
+
+-- ---------------------------------------------------------------------
+-- Fees 2026-27 (real config; amounts editable by Admin in Fee setup)
+-- Tuition = annual amounts from school_reference.json (rupees -> paise).
+-- Exam and Books are 0 until the Admin enters them. Due day: the 10th.
+-- Default plans: Tuition Monthly; Exam and Books One-time (DECISIONS.md F6).
+-- ---------------------------------------------------------------------
+insert into public.fee_plans (academic_year_id, name, kind, due_day)
+select y.id, p.name, p.kind, 10
+from public.academic_years y
+cross join (values ('Monthly', 'monthly'), ('One-time', 'one_time')) as p(name, kind)
+where y.name = '2026-27'
+on conflict (academic_year_id, name) do nothing;
+
+with tuition(class_name, rupees) as (values
+  ('Nursery', 8250), ('LKG', 8800), ('UKG', 8800), ('Class 1', 9350), ('Class 2', 9900), ('Class 3', 10450),
+  ('Class 4', 10450), ('Class 5', 11000), ('Class 6', 11550), ('Class 7', 12100), ('Class 8', 13200),
+  ('Class 9', 15400), ('Class 10', 20000)
+)
+insert into public.fee_structure (academic_year_id, class_id, fee_head_id, amount_paise, default_plan_id)
+select y.id, c.id, h.id, t.rupees::bigint * 100, p.id
+from tuition t
+join public.classes c on c.name = t.class_name
+cross join (select id from public.academic_years where name = '2026-27') y
+join public.fee_heads h on h.code = 'TUITION'
+join public.fee_plans p on p.academic_year_id = y.id and p.name = 'Monthly'
+on conflict (academic_year_id, class_id, fee_head_id) do nothing;
+
+insert into public.fee_structure (academic_year_id, class_id, fee_head_id, amount_paise, default_plan_id)
+select y.id, c.id, h.id, 0, p.id
+from public.classes c
+cross join (select id from public.academic_years where name = '2026-27') y
+join public.fee_heads h on h.code in ('EXAM', 'BOOKS')
+join public.fee_plans p on p.academic_year_id = y.id and p.name = 'One-time'
+on conflict (academic_year_id, class_id, fee_head_id) do nothing;

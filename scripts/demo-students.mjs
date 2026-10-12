@@ -7,6 +7,7 @@
 // (placeholder document files in private storage).
 import pg from "pg";
 import { createClient } from "@supabase/supabase-js";
+import { wipeDemoFees } from "./demo-fees.mjs";
 
 const SURNAMES = [
   "Gandluri", "Pasupuleti", "Kommu", "Bandi", "Chinthala", "Dasari", "Gangireddy", "Kalluri", "Mandla", "Nallapu",
@@ -203,6 +204,8 @@ export async function seedDemoStudents() {
 export async function wipeDemoStudents() {
   const { DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key } = process.env;
   if (!DATABASE_URL || !url || !key) throw new Error("DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (.env.local)");
+  // fee data references students: remove demo fee data first
+  await wipeDemoFees();
   const db = new pg.Client({ connectionString: DATABASE_URL });
   await db.connect();
   try {
@@ -216,6 +219,7 @@ export async function wipeDemoStudents() {
       }
     }
     await db.query("begin");
+    await db.query("delete from public.student_fee_dues where student_id in (select id from public.students where is_demo)");
     const s = await db.query("delete from public.students where is_demo");
     const g = await db.query(
       "delete from public.guardians g where g.is_demo and not exists (select 1 from public.student_guardians sg where sg.guardian_id = g.id)",

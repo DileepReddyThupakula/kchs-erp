@@ -13,8 +13,8 @@ Last updated: 2026-10-12 (Module 1 + design pass + permission model v2)
 | # | Topic | Default | Where to change |
 |---|---|---|---|
 | D1 | Academic year | April 1 – March 31 (e.g. "2026-27") | Setup → Academic years |
-| D2 | Fee heads | ~~Default list~~ **Superseded:** you asked me to confirm the other fee heads with you when the Fees module starts. **Transport is disabled** (no school buses). | Fees → Fee heads |
-| D3 | Fee installments | ~~4 quarters~~ **Superseded:** to be confirmed with you in the Fees module (how tuition is paid, installments, due dates). | Fees → Installments |
+| D2 | Fee heads | **Answered (F-section):** Tuition, Exam, Books + any custom head. **Transport is disabled** (no school buses). | Fees → Fee setup |
+| D3 | Fee installments | **Answered (F-section):** One-time, Monthly, Custom plans; due on the 10th. | Fees → Fee setup |
 | D4 | Report card format | One page per term: school header + logo, student details, scholastic marks table (each exam + total + grade), co-scholastic grades, attendance (working days / present incl. half days), class teacher remarks, result, signatures (class teacher, principal, parent) | Settings → Report card layout |
 
 ## 2. Your instructions turned into rules
@@ -99,7 +99,7 @@ All of S1–S3 can be changed by the Admin in Setup → Subjects (add, rename, d
 |---|---|---|
 | ~~P1~~ | ~~Sections per class~~ **Answered:** A only, English (R16) | — |
 | P2 | School details still blank: UDISE code, recognition details, email, website, logo, phone numbers. The dashboard reminds the Admin. | Nothing (fill in any time in Settings) |
-| P3 | Fees: how tuition is paid (installments and due dates) and what other fee heads exist | Fees module |
+| ~~P3~~ | ~~Fees questions~~ **Answered 2026-10-12** (F-section) | — |
 
 ## 4c. Real reference figures (stored in `supabase/seed/school_reference.json`)
 
@@ -206,3 +206,20 @@ Parent Aadhaar and the bank account were answered: not stored for now (R11).
 | B6 | **Design system (Job 1, 2026-10-12):** one reusable `DataTable` (search, filter chips, sorting, pagination, row selection + bulk bar, column show/hide remembered per browser, skeleton, CSV/Excel export of the filtered or selected rows); `PageHeader` with breadcrumbs, description, actions and a filter bar; editing in right-side drawers with grouped sections and a sticky Save/Cancel bar; confirmation dialogs (native `<dialog>`) for destructive actions; `StatusChip`. |
 | B7 | **Every export is written to the audit log** (`action = export`, table, row count, format, filters). Excel files are made in the browser (`write-excel-file`, loaded only on export); CSV has a UTF-8 BOM so Telugu opens correctly in Excel. |
 | B8 | Teacher assignments page: Admin edits; teachers see a read-only "My classes & subjects" view of their own sections (scope rule). The `/staff/new` page was replaced by the Add drawer (`/staff?new=1`). |
+
+## 7. Fees (Module: Fees, Part 1, 2026-10-12)
+
+| # | Decision |
+|---|---|
+| F1 | Monthly due day: **10th**, editable by Admin per plan (per year) and per installment. |
+| F2 | **No late fee.** Reserved for later without a rebuild: `fee_heads.late_fee_rule`, `fee_receipt_items.fine_paise`. |
+| F3 | Exam: **one-time** plan, amount **₹0 until Admin enters it** per class. Admin can create any custom head with any plan. |
+| F4 | Books: **₹0 until Admin enters it** per class, one-time. |
+| F5 | Mid-year joiners: **monthly plans charge from the joining month** (the annual amount is split over 12 months and only the remaining months are charged). One-time/custom plans are generated in full, and Admin reduces them with a **fixed concession + reason** (audit-logged). |
+| F6 | **Default plans (my default, you didn't answer this one):** Tuition = Monthly, Exam = One-time, Books = One-time. Admin can change the default per class and override per student. |
+| F7 | Money is integer **paise** everywhere. Equal monthly split: remainder in the **last** installment. Percentage plans: each share rounded down, remainder in the last. Percent concession: rounded down per installment. Fixed concession: taken from the **last** installment backwards. A concession never exceeds the unpaid part of a due. |
+| F8 | Receipt numbers: `<prefix><financial year>/<0001>` (e.g. RCPT-2026-27/0001), per April–March financial year of the receipt date, **gap-free and unique even with simultaneous saves** (tested with 8 parallel connections). Receipts are never deleted; Admin cancels with a reason, dues go back to unpaid, the number stays visible as cancelled. |
+| F9 | Payments go to the **oldest due first**, or to the dues chosen (oldest first among them). Paying more than is due is blocked. Only Admin can date a receipt other than today. Non-cash payments need a reference number. The collector is recorded on every receipt. |
+| F10 | Dues are generated automatically on enrolment and whenever the fee structure, a student's plan, admission date or class changes. Regeneration never duplicates and never removes or reduces paid dues. On a plan change, unpaid dues of the old plan are voided (kept for history) and the rest of the annual amount moves to the new plan. |
+| F11 | Access: Admin everything. **fee_collection** duty: read all fee data, collect, print. No changes to setup, amounts, plans, concessions; no cancelling. **Everyone else: no fee data at all**, even class teachers (RLS + API tests). |
+| F12 | Demo: `npm run seed:demo-fees` / `npm run wipe:demo-fees -- --yes` (removes demo receipts, overrides, concessions and the demo "Three terms" plan, resets the receipt counter to the last real receipt). Real fee setup (tuition from `school_reference.json`) is kept. |
