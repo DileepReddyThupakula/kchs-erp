@@ -195,6 +195,93 @@ export type StudentDocument = Stamps & {
   mime_type: string;
   size_bytes: number;
 };
+export type FeeHead = Stamps & { id: string; name: string; code: string | null; sort_order: number; is_active: boolean; late_fee_rule: Json | null };
+export type FeePlanKind = "one_time" | "monthly" | "custom";
+export type FeePlan = Stamps & { id: string; academic_year_id: string; name: string; kind: FeePlanKind; due_day: number; is_active: boolean; is_demo: boolean };
+export type FeePlanInstallment = Stamps & {
+  id: string;
+  plan_id: string;
+  seq: number;
+  label: string;
+  due_date: string;
+  period_month: string | null;
+  share_bp: number | null;
+  amount_paise: number | null;
+};
+export type FeeStructure = Stamps & {
+  id: string;
+  academic_year_id: string;
+  class_id: string;
+  fee_head_id: string;
+  amount_paise: number;
+  default_plan_id: string | null;
+};
+export type StudentFeePlan = Stamps & { id: string; student_id: string; academic_year_id: string; fee_head_id: string; plan_id: string; reason: string };
+export type FeeConcession = Stamps & {
+  id: string;
+  student_id: string;
+  academic_year_id: string;
+  fee_head_id: string | null;
+  kind: "fixed" | "percent";
+  amount_paise: number | null;
+  percent_bp: number | null;
+  reason: string;
+};
+export type StudentFeeDue = Stamps & {
+  id: string;
+  student_id: string;
+  academic_year_id: string;
+  fee_head_id: string;
+  plan_id: string;
+  installment_seq: number;
+  label: string;
+  due_date: string;
+  amount_paise: number;
+  concession_paise: number;
+  paid_paise: number;
+  voided_at: string | null;
+};
+export type PaymentMode = "cash" | "upi" | "cheque" | "bank_transfer";
+export type FeeReceipt = Stamps & {
+  id: string;
+  receipt_no: string;
+  financial_year: string;
+  seq: number;
+  receipt_date: string;
+  student_id: string | null;
+  total_paise: number;
+  payment_mode: PaymentMode;
+  reference_no: string | null;
+  notes: string | null;
+  collected_by: string;
+  status: "valid" | "cancelled";
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  is_demo: boolean;
+  kind: "dues" | "misc";
+  payer_name: string | null;
+};
+export type FeeReceiptItem = Stamps & { id: string; receipt_id: string; due_id: string | null; fee_head_id: string; amount_paise: number; fine_paise: number };
+export type FeeCampaign = Stamps & {
+  id: string;
+  academic_year_id: string;
+  fee_head_id: string;
+  plan_id: string;
+  name: string;
+  description: string | null;
+  amount_mode: "flat" | "per_class";
+  amount_paise: number | null;
+  audience: "all" | "classes" | "sections" | "students";
+  audience_ids: string[];
+  apply_concessions: boolean;
+  status: "active" | "cancelled";
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  is_demo: boolean;
+};
+export type FeeCampaignClassAmount = Stamps & { campaign_id: string; class_id: string; amount_paise: number };
+export type FeeCampaignStudent = Stamps & { campaign_id: string; student_id: string };
 export type Subject = Stamps & {
   id: string;
   name: string;
@@ -257,6 +344,38 @@ export type Database = {
         [FK<"staff_permissions_staff_id_fkey", "staff_id", "staff">]
       >;
       subjects: T<Subject, "name">;
+      fee_heads: T<FeeHead, "name">;
+      fee_plans: T<FeePlan, "academic_year_id" | "name" | "kind", [FK<"fee_plans_academic_year_id_fkey", "academic_year_id", "academic_years">]>;
+      fee_plan_installments: T<FeePlanInstallment, "plan_id" | "seq" | "label" | "due_date", [FK<"fee_plan_installments_plan_id_fkey", "plan_id", "fee_plans">]>;
+      fee_structure: T<FeeStructure, "academic_year_id" | "class_id" | "fee_head_id", [FK<"fee_structure_fee_head_id_fkey", "fee_head_id", "fee_heads">, FK<"fee_structure_class_id_fkey", "class_id", "classes">]>;
+      student_fee_plans: T<StudentFeePlan, "student_id" | "academic_year_id" | "fee_head_id" | "plan_id" | "reason">;
+      fee_concessions: T<
+        FeeConcession,
+        "student_id" | "academic_year_id" | "kind" | "reason",
+        [FK<"fee_concessions_student_id_fkey", "student_id", "students">, FK<"fee_concessions_fee_head_id_fkey", "fee_head_id", "fee_heads">]
+      >;
+      student_fee_dues: T<
+        StudentFeeDue,
+        "student_id" | "academic_year_id" | "fee_head_id" | "plan_id" | "installment_seq" | "label" | "due_date" | "amount_paise",
+        [FK<"student_fee_dues_student_id_fkey", "student_id", "students">, FK<"student_fee_dues_fee_head_id_fkey", "fee_head_id", "fee_heads">]
+      >;
+      fee_receipts: T<
+        FeeReceipt,
+        "receipt_no" | "financial_year" | "seq" | "receipt_date" | "total_paise" | "payment_mode" | "collected_by",
+        [FK<"fee_receipts_student_id_fkey", "student_id", "students">, FK<"fee_receipts_collected_by_fkey", "collected_by", "staff">]
+      >;
+      fee_receipt_items: T<
+        FeeReceiptItem,
+        "receipt_id" | "fee_head_id" | "amount_paise",
+        [FK<"fee_receipt_items_receipt_id_fkey", "receipt_id", "fee_receipts">, FK<"fee_receipt_items_fee_head_id_fkey", "fee_head_id", "fee_heads">]
+      >;
+      fee_campaigns: T<
+        FeeCampaign,
+        "academic_year_id" | "fee_head_id" | "plan_id" | "name" | "amount_mode" | "audience",
+        [FK<"fee_campaigns_fee_head_id_fkey", "fee_head_id", "fee_heads">, FK<"fee_campaigns_plan_id_fkey", "plan_id", "fee_plans">]
+      >;
+      fee_campaign_class_amounts: T<FeeCampaignClassAmount, "campaign_id" | "class_id" | "amount_paise">;
+      fee_campaign_students: T<FeeCampaignStudent, "campaign_id" | "student_id">;
       student_field_definitions: T<StudentFieldDefinition, "key" | "label" | "field_group" | "field_type">;
       student_document_types: T<StudentDocumentType, "code" | "label">;
       students: T<Student, "full_name" | "gender" | "date_of_birth">;
@@ -307,6 +426,20 @@ export type Database = {
       set_student_secure_value: { Args: { p_student_id: string; p_field_key: string; p_value: string }; Returns: undefined };
       reveal_student_secure_values: { Args: { p_student_id: string }; Returns: { field_key: string; label: string; value: string }[] };
       save_student: { Args: { p: Json }; Returns: string };
+      collect_fee: {
+        Args: { p_student_id: string; p_amount_paise: number; p_mode: string; p_reference?: string; p_notes?: string; p_due_ids?: string[]; p_receipt_date?: string };
+        Returns: string;
+      };
+      cancel_fee_receipt: { Args: { p_receipt_id: string; p_reason: string }; Returns: undefined };
+      regenerate_fee_dues: { Args: { p_year: string; p_student?: string }; Returns: number };
+      create_special_fee: { Args: { p: Json }; Returns: string };
+      update_special_fee: { Args: { p_id: string; p: Json }; Returns: undefined };
+      add_special_fee_students: { Args: { p_id: string; p_student_ids: string[] }; Returns: number };
+      cancel_special_fee: { Args: { p_id: string; p_reason: string }; Returns: number };
+      create_misc_receipt: {
+        Args: { p_fee_head_id: string; p_amount_paise: number; p_mode: string; p_reference?: string; p_student_id?: string; p_payer_name?: string; p_notes?: string; p_receipt_date?: string };
+        Returns: string;
+      };
       export_student_ids: { Args: { p_ids: string[] }; Returns: { student_id: string; field_key: string; value: string }[] };
       staff_directory: {
         Args: never;

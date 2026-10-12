@@ -109,11 +109,12 @@ export const PAGES: PageDef[] = [
   { path: "/notices", name: "Notices", icon: Megaphone, module: "notices", status: "planned", access: { admin: true, duty: "notices_diary" }, menu: { admin: "Academics", teacher: "Academics" }, description: "Add, edit and publish school notices for classes, sections or staff (deleting is Admin only)." },
 
   // ---------------------------------------------------------------- fees
-  { path: "/fees/collect", name: "Collect fee", icon: Wallet, module: "fees", status: "planned", access: { admin: true, duty: "fee_collection" }, menu: { admin: "Fees", teacher: "Fees" }, description: "Look up any student, collect fees and print a receipt." },
-  { path: "/fees/receipts", name: "Receipts", icon: Receipt, module: "fees", status: "planned", access: { admin: true, duty: "fee_collection" }, menu: { admin: "Fees", teacher: "Fees" }, description: "Search and reprint receipts (cancelling a receipt is Admin only)." },
-  { path: "/fees/dues", name: "Dues", icon: BadgeIndianRupee, module: "fees", status: "planned", access: { admin: true, duty: "fee_collection" }, menu: { admin: "Fees", teacher: "Fees" }, description: "Outstanding fees by class, student and installment." },
-  { path: "/fees/setup", name: "Fee setup", icon: Settings, module: "fees", status: "planned", access: { admin: true }, menu: { admin: "Fees" }, description: "Fee heads, installments and due dates, and the fee plan per class." },
-  { path: "/fees/concessions", name: "Concessions", icon: Percent, module: "fees", status: "planned", access: { admin: true }, menu: { admin: "Fees" }, description: "Concession types and which students receive them." },
+  { path: "/fees/collect", name: "Collect fee", icon: Wallet, module: "fees", status: "built", access: { admin: true, duty: "fee_collection" }, menu: { admin: "Fees", teacher: "Fees" }, description: "Look up any student, collect fees and print a receipt." },
+  { path: "/fees/receipts", name: "Receipts", icon: Receipt, module: "fees", status: "built", access: { admin: true, duty: "fee_collection" }, menu: { admin: "Fees", teacher: "Fees" }, description: "Search and reprint receipts (cancelling a receipt is Admin only)." },
+  { path: "/fees/dues", name: "Dues", icon: BadgeIndianRupee, module: "fees", status: "built", access: { admin: true, duty: "fee_collection" }, menu: { admin: "Fees", teacher: "Fees" }, description: "Outstanding fees by class, student and installment." },
+  { path: "/fees/reports", name: "Fee reports", icon: BarChart3, module: "fees", status: "built", access: { admin: true, duty: "fee_collection" }, menu: { admin: "Fees", teacher: "Fees" }, description: "Daily collection and date-range reports with totals by payment mode and fee head." },
+  { path: "/fees/setup", name: "Fee setup", icon: Settings, module: "fees", status: "built", access: { admin: true }, menu: { admin: "Fees" }, description: "Fee heads, installments and due dates, and the fee plan per class." },
+  { path: "/fees/concessions", name: "Concessions", icon: Percent, module: "fees", status: "built", access: { admin: true }, menu: { admin: "Fees" }, description: "Concession types and which students receive them." },
 
   // ---------------------------------------------------------------- staff
   { path: "/staff", name: "Staff list", icon: Users, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "Staff" }, description: "Staff records, logins and teacher duties." },

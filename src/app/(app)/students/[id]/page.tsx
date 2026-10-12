@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarCheck, ClipboardPen, GraduationCap, Pencil, Wallet } from "lucide-react";
+import { CalendarCheck, ClipboardPen, GraduationCap, Pencil } from "lucide-react";
 import { requireStaff } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -11,6 +11,7 @@ import { buttonClasses } from "@/components/ui/button-classes";
 import { getStudentConfig, getStudentProfile } from "@/features/students/queries";
 import { GROUP_LABEL, maskId, missingGovFields, STATUS_LABEL } from "@/features/students/fields";
 import { DocumentsPanel, RevealIdsButton, SavedToast, StatusButton } from "./client";
+import { StudentFeesPanel } from "./fees-panel";
 
 export const metadata = { title: "Student" };
 
@@ -32,6 +33,7 @@ export default async function StudentProfilePage({ params, searchParams }: { par
   if (!p) redirect("/not-allowed");
 
   const manage = can(me, "students.edit");
+  const feeAccess = can(me, "fees.view"); // Admin and the fee_collection duty only
   const govIds = can(me, "students.govIdView");
   const showGov = manage || govIds;
   const supabase = await createClient();
@@ -47,7 +49,7 @@ export default async function StudentProfilePage({ params, searchParams }: { par
     ...(manage ? [{ id: "documents", label: "Documents", count: p.documents.length }] : []),
     { id: "history", label: "Enrolment history", count: p.history.length },
     { id: "attendance", label: "Attendance" },
-    { id: "fees", label: "Fees" },
+    ...(feeAccess ? [{ id: "fees", label: "Fees" }] : []),
     { id: "marks", label: "Marks" },
   ].map((t) => ({ ...t, href: `/students/${id}?tab=${t.id}` }));
   const backHref = manage ? "/students" : "/my/students";
@@ -230,10 +232,11 @@ export default async function StudentProfilePage({ params, searchParams }: { par
         </Card>
       )}
 
-      {(["attendance", "fees", "marks"] as const).includes(tab as "attendance") && (
+      {tab === "fees" && feeAccess && <StudentFeesPanel studentId={s.id} />}
+
+      {(["attendance", "marks"] as const).includes(tab as "attendance") && (
         <EmptyState title="Coming soon">
           {tab === "attendance" && (<><CalendarCheck className="mr-1 inline size-4" />Attendance for this student will appear here with the Attendance module.</>)}
-          {tab === "fees" && (<><Wallet className="mr-1 inline size-4" />Fees, receipts and dues will appear here with the Fees module.</>)}
           {tab === "marks" && (<><ClipboardPen className="mr-1 inline size-4" />Marks and report cards will appear here with the Exams & marks module.</>)}
         </EmptyState>
       )}
