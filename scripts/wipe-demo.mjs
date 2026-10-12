@@ -3,6 +3,7 @@
 // Needs: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
 import { createClient } from "@supabase/supabase-js";
 import { DEMO_CODE_PREFIX, DEMO_EMAIL_DOMAIN } from "./demo-data.mjs";
+import { wipeDemoStudents } from "./demo-students.mjs";
 
 const { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key } = process.env;
 if (!url || !key) {
@@ -15,6 +16,9 @@ if (!process.argv.includes("--yes")) {
 }
 
 const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+
+// Demo students first (only rows marked is_demo); real students are never touched.
+await wipeDemoStudents();
 
 // Staff first (teacher assignments cascade; class teacher links are cleared).
 const { data: removed, error } = await db.from("staff").delete().like("employee_code", `${DEMO_CODE_PREFIX}%`).select("id");

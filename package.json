@@ -13,7 +13,10 @@
     "seed:wipe": "node --env-file-if-exists=.env.local scripts/wipe-demo.mjs",
     "typecheck": "tsc --noEmit",
     "brand:icons": "node scripts/brand-icons.mjs",
-    "brand:set-logo": "node --env-file-if-exists=.env.local scripts/set-logo.mjs"
+    "brand:set-logo": "node --env-file-if-exists=.env.local scripts/set-logo.mjs",
+    "db:apply": "node --env-file-if-exists=.env.local scripts/apply-migration.mjs",
+    "seed:demo-students": "node --env-file-if-exists=.env.local scripts/demo-students.mjs seed",
+    "wipe:demo-students": "node --env-file-if-exists=.env.local scripts/demo-students.mjs wipe"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

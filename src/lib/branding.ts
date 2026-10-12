@@ -5,7 +5,7 @@ import type { Database } from "@/types/database";
 
 export const FALLBACK_LOGO = "/brand/logo-512.webp";
 
-export type Branding = { name: string; shortName: string; logoUrl: string };
+export type Branding = { name: string; shortName: string; logoUrl: string; motto: string | null };
 
 /**
  * School name + logo for places that render before sign-in (login page,
@@ -13,7 +13,7 @@ export type Branding = { name: string; shortName: string; logoUrl: string };
  * key; falls back to the bundled logo if Settings has none.
  */
 export const getBranding = cache(async (): Promise<Branding> => {
-  let row: { name: string; short_name: string | null; logo_path: string | null } | undefined;
+  let row: { name: string; short_name: string | null; logo_path: string | null; motto: string | null } | undefined;
   try {
     const supabase = createClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
       auth: { persistSession: false },
@@ -27,24 +27,10 @@ export const getBranding = cache(async (): Promise<Branding> => {
   return {
     name,
     shortName: row?.short_name || name,
+    motto: row?.motto ?? null,
     logoUrl: row?.logo_path
       ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/branding/${row.logo_path}`
       : FALLBACK_LOGO,
   };
 });
 
-/**
- * School motto (Settings → School → Motto, stored in school_settings.extra).
- * Read server-side with a fixed single-field query because public_branding()
- * doesn't return it yet (planned for the Module 2 migration).
- */
-export const getMotto = cache(async (): Promise<string | null> => {
-  try {
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const { data } = await createAdminClient().from("school_settings").select("extra").eq("id", 1).maybeSingle();
-    const motto = (data?.extra as { motto?: unknown } | null)?.motto;
-    return typeof motto === "string" && motto.trim() ? motto.trim() : null;
-  } catch {
-    return null;
-  }
-});

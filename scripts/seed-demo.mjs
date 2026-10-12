@@ -4,6 +4,7 @@
 // Needs: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DEMO_USER_PASSWORD.
 import { createClient } from "@supabase/supabase-js";
 import { DEMO_CLASS_TEACHERS, DEMO_DUTIES, DEMO_STAFF, DEMO_SUBJECT_TEACHERS } from "./demo-data.mjs";
+import { seedDemoStudents } from "./demo-students.mjs";
 
 const { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key, DEMO_USER_PASSWORD: password } = process.env;
 for (const [k, v] of Object.entries({ NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key, DEMO_USER_PASSWORD: password })) {
@@ -95,3 +96,6 @@ if (!year) {
 
 console.log("Demo logins (password = DEMO_USER_PASSWORD from .env.local):");
 for (const l of logins) console.log("  -", l);
+
+// ---- demo students (~60, fake IDs)
+await seedDemoStudents();

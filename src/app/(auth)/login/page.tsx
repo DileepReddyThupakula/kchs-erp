@@ -1,4 +1,4 @@
-import { getBranding, getMotto } from "@/lib/branding";
+import { getBranding } from "@/lib/branding";
 import { LoginScene } from "@/components/brand/login-scene";
 import { TiltLogo } from "@/components/brand/tilt-logo";
 import { LoginForm } from "./login-form";
@@ -7,7 +7,8 @@ export const metadata = { title: "Sign in" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
-  const [brand, motto] = await Promise.all([getBranding(), getMotto()]);
+  const brand = await getBranding();
+  const motto = brand.motto;
 
   return (
     <main className="login-scene relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10 text-cream-100">

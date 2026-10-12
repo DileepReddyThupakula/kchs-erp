@@ -126,6 +126,75 @@ export type StaffPermission = {
   granted_by: string | null;
   granted_at: string;
 };
+export type FieldType = "text" | "number" | "date" | "boolean" | "select" | "multiselect";
+export type StudentFieldDefinition = Stamps & {
+  key: string;
+  label: string;
+  field_group: "identity" | "social" | "disability" | "enrolment" | "previous_school" | "facilities" | "other";
+  field_type: FieldType;
+  options: string[] | null;
+  pattern: string | null;
+  help: string | null;
+  required_for_gov: boolean;
+  sensitive: boolean;
+  reveal_with_duty: boolean;
+  sort_order: number;
+  is_active: boolean;
+};
+export type StudentDocumentType = Stamps & { code: string; label: string; required: boolean; sort_order: number; is_active: boolean };
+export type StudentStatus = "active" | "left" | "tc_issued" | "passed_out";
+export type Student = Stamps & {
+  id: string;
+  admission_no: string;
+  full_name: string;
+  gender: "male" | "female" | "other";
+  date_of_birth: string;
+  admission_date: string;
+  address: string | null;
+  village_town: string | null;
+  district: string | null;
+  pincode: string | null;
+  photo_path: string | null;
+  status: StudentStatus;
+  status_date: string | null;
+  status_reason: string | null;
+  is_demo: boolean;
+};
+export type StudentProfile = Stamps & { student_id: string; details: Record<string, Json> };
+/** value_enc is never selectable through the API. */
+export type StudentSecureValue = { student_id: string; field_key: string; value_last4: string; updated_at: string };
+export type Guardian = Stamps & {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  alt_phone: string | null;
+  email: string | null;
+  occupation: string | null;
+  education: string | null;
+  address: string | null;
+  pincode: string | null;
+  is_demo: boolean;
+};
+export type GuardianRelation = "father" | "mother" | "guardian" | "grandparent" | "sibling" | "other";
+export type StudentGuardian = Stamps & { id: string; student_id: string; guardian_id: string; relation: GuardianRelation; is_primary: boolean };
+export type EnrollmentStatus = "active" | "promoted" | "detained" | "left";
+export type StudentEnrollment = Stamps & {
+  id: string;
+  student_id: string;
+  academic_year_id: string;
+  section_id: string;
+  roll_no: number | null;
+  status: EnrollmentStatus;
+};
+export type StudentDocument = Stamps & {
+  id: string;
+  student_id: string;
+  doc_type: string;
+  file_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+};
 export type Subject = Stamps & {
   id: string;
   name: string;
@@ -188,6 +257,32 @@ export type Database = {
         [FK<"staff_permissions_staff_id_fkey", "staff_id", "staff">]
       >;
       subjects: T<Subject, "name">;
+      student_field_definitions: T<StudentFieldDefinition, "key" | "label" | "field_group" | "field_type">;
+      student_document_types: T<StudentDocumentType, "code" | "label">;
+      students: T<Student, "full_name" | "gender" | "date_of_birth">;
+      student_profiles: T<StudentProfile, "student_id", [FK<"student_profiles_student_id_fkey", "student_id", "students">]>;
+      student_secure_values: {
+        Row: StudentSecureValue;
+        Insert: never;
+        Update: never;
+        Relationships: [FK<"student_secure_values_student_id_fkey", "student_id", "students">];
+      };
+      guardians: T<Guardian, "full_name">;
+      student_guardians: T<
+        StudentGuardian,
+        "student_id" | "guardian_id" | "relation",
+        [FK<"student_guardians_student_id_fkey", "student_id", "students">, FK<"student_guardians_guardian_id_fkey", "guardian_id", "guardians">]
+      >;
+      student_enrollments: T<
+        StudentEnrollment,
+        "student_id" | "academic_year_id" | "section_id",
+        [
+          FK<"student_enrollments_student_id_fkey", "student_id", "students">,
+          FK<"student_enrollments_section_id_fkey", "section_id", "sections">,
+          FK<"student_enrollments_academic_year_id_fkey", "academic_year_id", "academic_years">,
+        ]
+      >;
+      student_documents: T<StudentDocument, "student_id" | "doc_type" | "file_path" | "file_name" | "mime_type" | "size_bytes", [FK<"student_documents_student_id_fkey", "student_id", "students">]>;
       teacher_assignments: T<
         TeacherAssignment,
         "staff_id" | "section_id" | "subject_id",
@@ -208,7 +303,9 @@ export type Database = {
       my_role: { Args: never; Returns: AppRole };
       has_duty: { Args: { p_duty: StaffDuty }; Returns: boolean };
       my_duties: { Args: never; Returns: StaffDuty[] };
-      public_branding: { Args: never; Returns: { logo_path: string; name: string; short_name: string }[] };
+      public_branding: { Args: never; Returns: { logo_path: string; name: string; short_name: string; motto: string | null }[] };
+      set_student_secure_value: { Args: { p_student_id: string; p_field_key: string; p_value: string }; Returns: undefined };
+      reveal_student_secure_values: { Args: { p_student_id: string }; Returns: { field_key: string; label: string; value: string }[] };
       staff_directory: {
         Args: never;
         Returns: { id: string; full_name: string; designation: string; department: string; status: string }[];
