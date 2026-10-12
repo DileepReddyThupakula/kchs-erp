@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { DataTable, type Column, type RowAction } from "@/components/data-table/data-table";
 import { Drawer } from "@/components/ui/dialog";
@@ -70,7 +70,10 @@ function InstallmentEditor({ kind, initial, error }: { kind: string; initial: In
 export function PlansTab({ yearId, plans, installments }: { yearId: string; plans: FeePlan[]; installments: FeePlanInstallment[] }) {
   const drawer = useDrawer<Row>();
   const [kind, setKind] = useState("monthly");
-  const rows: Row[] = plans.map((p) => ({ ...p, installments: installments.filter((i) => i.plan_id === p.id).sort((a, b) => a.seq - b.seq) }));
+  const rows: Row[] = useMemo(
+    () => plans.map((p) => ({ ...p, installments: installments.filter((i) => i.plan_id === p.id).sort((a, b) => a.seq - b.seq) })),
+    [plans, installments],
+  );
   const columns: Column<Row>[] = [
     { id: "name", header: "Plan", hideable: false, pinned: "left", className: "whitespace-nowrap", cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name },
     { id: "kind", header: "Type", cell: (r) => <Badge tone="info">{KIND_LABEL[r.kind]}</Badge>, sortValue: (r) => r.kind },

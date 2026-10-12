@@ -87,6 +87,11 @@ function Popover({ button, children, align = "left" }: { button: (toggle: () => 
 const toolBtn =
   "inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 text-sm text-navy-800 shadow-sm transition-colors hover:border-navy-200 hover:bg-navy-50 aria-expanded:border-navy-300 aria-expanded:bg-navy-50";
 
+// Defaults for omitted props must be module-level constants: `filters = []`
+// would be a new array on every render and re-trigger every memo/effect below.
+const NO_FILTERS: never[] = [];
+const NO_INITIAL_FILTERS: Record<string, string> = {};
+
 function readHidden(key: string, fallback: string[]) {
   try {
     const v = localStorage.getItem(key);
@@ -108,8 +113,8 @@ export function DataTable<T>({
   getRowId,
   searchText,
   searchPlaceholder = "Search…",
-  filters = [],
-  initialFilters = {},
+  filters = NO_FILTERS as FilterDef<T>[],
+  initialFilters = NO_INITIAL_FILTERS,
   pageSize: initialPageSize = 25,
   selectable = false,
   bulkActions,
@@ -177,7 +182,12 @@ export function DataTable<T>({
   const storageKey = `dt-cols:${id}`;
   const defaultHidden = useMemo(() => columns.filter((c) => c.defaultHidden).map((c) => c.id), [columns]);
   const [hidden, setHidden] = useState<string[]>(defaultHidden);
-  useEffect(() => setHidden(readHidden(storageKey, defaultHidden)), [storageKey, defaultHidden]);
+  // keyed on a string so a rebuilt `columns` array can never retrigger it
+  const defaultHiddenKey = defaultHidden.join("\u0001");
+  useEffect(() => {
+    const next = readHidden(storageKey, defaultHiddenKey ? defaultHiddenKey.split("\u0001") : []);
+    setHidden((cur) => (cur.length === next.length && cur.every((c, i) => c === next[i]) ? cur : next));
+  }, [storageKey, defaultHiddenKey]);
   const toggleColumn = (cid: string) =>
     setHidden((h) => {
       const next = h.includes(cid) ? h.filter((x) => x !== cid) : [...h, cid];
@@ -226,8 +236,19 @@ export function DataTable<T>({
 
   // Reset paging / prune selection when the visible set changes.
   useEffect(() => setPage(0), [query, active, pageSize]);
-  const ids = useMemo(() => new Set(filtered.map(getRowId)), [filtered, getRowId]);
-  useEffect(() => setSelected((s) => new Set([...s].filter((x) => ids.has(x)))), [ids]);
+  // A primitive key: it only changes when the SET of visible rows changes, not
+  // when the caller rebuilds `rows`, `columns` or an inline `getRowId`.
+  const idKey = filtered.map((r) => getRowId(r)).join("\u0001");
+  useEffect(() => {
+    setSelected((cur) => {
+      if (cur.size === 0) return cur;
+      const visibleIds = new Set(idKey === "" ? [] : idKey.split("\u0001"));
+      let gone = false;
+      for (const x of cur) if (!visibleIds.has(x)) gone = true;
+      // same state object when nothing to remove -> React bails out, no loop
+      return gone ? new Set([...cur].filter((x) => visibleIds.has(x))) : cur;
+    });
+  }, [idKey]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = filtered.slice(page * pageSize, page * pageSize + pageSize);

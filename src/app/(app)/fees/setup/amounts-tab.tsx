@@ -1,4 +1,5 @@
 "use client";
+import { useMemo } from "react";
 import { DataTable, type Column, type RowAction } from "@/components/data-table/data-table";
 import { Drawer } from "@/components/ui/dialog";
 import { ActionForm, FormSection } from "@/components/ui/action-form";
@@ -18,7 +19,10 @@ export function AmountsTab({ yearId, yearName, classes, heads, plans, structure 
   const drawer = useDrawer<Row>();
   const planName = new Map(plans.map((p) => [p.id, p.name]));
   const cell = (classId: string, headId: string) => structure.find((s) => s.classId === classId && s.headId === headId);
-  const rows: Row[] = classes.map((c) => ({ ...c, total: heads.reduce((a, h) => a + (cell(c.id, h.id)?.amount ?? 0), 0) }));
+  const rows: Row[] = useMemo(
+    () => classes.map((c) => ({ ...c, total: heads.reduce((a, h) => a + (structure.find((s) => s.classId === c.id && s.headId === h.id)?.amount ?? 0), 0) })),
+    [classes, heads, structure],
+  );
 
   const columns: Column<Row>[] = [
     { id: "class", header: "Class", hideable: false, pinned: "left", className: "whitespace-nowrap", cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.order, exportValue: (r) => r.name },
