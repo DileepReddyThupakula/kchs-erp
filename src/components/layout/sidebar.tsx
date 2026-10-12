@@ -4,9 +4,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { can, type Permissions } from "@/lib/auth/permissions";
+import type { Permissions } from "@/lib/auth/permissions";
+import { buildMenu } from "@/lib/site-map";
 import { LogoBadge } from "@/components/brand/logo-badge";
-import { NAV } from "./nav";
 
 export function Sidebar({ perms, shortName, logoUrl }: { perms: Permissions; shortName: string; logoUrl: string }) {
   const pathname = usePathname();
@@ -20,12 +20,12 @@ export function Sidebar({ perms, shortName, logoUrl }: { perms: Permissions; sho
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const groups = NAV.map((g) => ({
-    ...g,
-    items: g.items.filter((i) => (i.teacherOnly ? perms.role === "teacher" : !i.cap || can(perms, i.cap))),
-  })).filter(
-    (g) => g.items.length,
-  );
+  const groups = buildMenu(perms); // single source of truth: src/lib/site-map.ts
+  const allPaths = groups.flatMap((g) => g.items.map((i) => i.path));
+  // Highlight the deepest matching item only (e.g. /attendance/all-classes, not /attendance too).
+  const isActive = (href: string) =>
+    pathname === href ||
+    (pathname.startsWith(href + "/") && !allPaths.some((o) => o !== href && o.startsWith(href + "/") && (pathname === o || pathname.startsWith(o + "/"))));
 
   const brand = (
     <Link href="/dashboard" className="flex items-center gap-3">
@@ -77,8 +77,8 @@ export function Sidebar({ perms, shortName, logoUrl }: { perms: Permissions; sho
             <div key={gi} className="mb-5">
               {g.label && <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-300">{g.label}</p>}
               <ul className="space-y-0.5">
-                {g.items.map(({ href, label, icon: Icon }) => {
-                  const active = pathname === href || pathname.startsWith(href + "/");
+                {g.items.map(({ path: href, name: label, icon: Icon, status }) => {
+                  const active = isActive(href);
                   return (
                     <li key={href}>
                       <Link
@@ -91,7 +91,10 @@ export function Sidebar({ perms, shortName, logoUrl }: { perms: Permissions; sho
                       >
                         {active && <span className="absolute inset-y-1.5 left-0 w-1 rounded-r-full bg-gold-500" aria-hidden />}
                         <Icon className={cn("size-[18px] shrink-0", active ? "text-gold-400" : "text-navy-300 group-hover:text-cream-100")} aria-hidden />
-                        {label}
+                        <span className="flex-1">{label}</span>
+                        {status === "planned" && (
+                          <span className="rounded-full bg-white/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-navy-300">Soon</span>
+                        )}
                       </Link>
                     </li>
                   );

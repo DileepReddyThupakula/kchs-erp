@@ -67,6 +67,7 @@ Last updated: 2026-10-12 (Module 1 + design pass + permission model v2)
 | T20 | Login motto is stored in `school_settings.extra.motto`, editable in Settings. The login page reads it server-side with a fixed single-field query until `public_branding()` returns it (planned for the Module 2 migration). | No database change in the design pass |
 | T21 | Section-level duties (all except `government_ids_view`) let a teacher read every section, class and subject, because every duty module needs that reference data. Only `timetable_edit` also shows all teacher assignments. "My classes" and the teacher dashboard always filter to the teacher's own sections, even with duties. |
 | T22 | `npm run test:db` also runs read-only API tests (`tests/api/*.mjs`) that sign in as demo users through Supabase, the same path the screens use. |
+| T23 | **Site map = single source of truth** (`src/lib/site-map.ts`): every page's name, path, icon, menu group (Admin / Teacher), who may open it (Admin / all teachers / a duty), module and status. The sidebar, placeholder pages (shared component via a catch-all route) and the Admin Roadmap read it. When a module is built: add its real page file and flip `status` to `"built"`. Placeholders check permissions before rendering (otherwise `/not-allowed`). | One place to change |
 
 ## 4. ⚠ VERIFY before go-live
 

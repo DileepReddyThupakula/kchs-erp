@@ -1,0 +1,180 @@
+/**
+ * SINGLE SOURCE OF TRUTH for every page in the ERP: the sidebar menu,
+ * placeholder ("coming soon") pages, permission checks for placeholders, and
+ * the Admin Roadmap page all read this file.
+ *
+ * When a module is built: add its real page file under src/app/(app)/… and
+ * change that page's `status` here to "built". Nothing else changes.
+ */
+import {
+  ArrowUpCircle,
+  BadgeIndianRupee,
+  BarChart3,
+  BookOpen,
+  BookOpenCheck,
+  CalendarCheck,
+  CalendarClock,
+  CalendarDays,
+  ClipboardList,
+  ClipboardPen,
+  FileBadge,
+  FileClock,
+  FileSpreadsheet,
+  GraduationCap,
+  IdCard,
+  LayoutDashboard,
+  Map as MapIcon,
+  Megaphone,
+  NotebookPen,
+  Percent,
+  Receipt,
+  ScrollText,
+  School,
+  Settings,
+  ShieldCheck,
+  UserCheck,
+  UserRound,
+  Users,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
+import { DUTY_INFO, type AppRole, type Duty } from "@/lib/auth/permissions";
+
+/** Planned modules, in build order (names, not numbers). */
+export const MODULES = [
+  { id: "foundation", name: "Foundation & school setup" },
+  { id: "students", name: "Students" },
+  { id: "timetable", name: "Timetable" },
+  { id: "attendance", name: "Attendance & leave" },
+  { id: "fees", name: "Fees" },
+  { id: "exams", name: "Exams & marks" },
+  { id: "notices", name: "Diary & notices" },
+  { id: "reports", name: "Reports" },
+  { id: "audit", name: "Audit log" },
+] as const;
+export type ModuleId = (typeof MODULES)[number]["id"];
+
+export const ADMIN_GROUPS = ["Students", "Academics", "Fees", "Staff", "Reports", "School setup", "Administration"] as const;
+export const TEACHER_GROUPS = ["My work", "Students", "Fees", "Academics"] as const;
+
+/**
+ * Who may open a page.
+ *   admin:   Admin may open it.
+ *   teacher: every teacher may open it (scope rule: own classes only).
+ *   duty:    teachers holding this duty may open it.
+ */
+export type Access = { admin?: boolean; teacher?: boolean; duty?: Duty };
+
+export type PageDef = {
+  path: string;
+  name: string;
+  icon: LucideIcon;
+  module: ModuleId;
+  status: "built" | "planned";
+  access: Access;
+  /** Where it appears in each menu (omit = not in that menu). */
+  menu: { admin?: (typeof ADMIN_GROUPS)[number] | "top"; teacher?: (typeof TEACHER_GROUPS)[number] | "top" };
+  /** What the page will do (Admin / duty wording). */
+  description: string;
+  /** Teacher wording, following the scope rule (own classes only). */
+  teacherDescription?: string;
+};
+
+export const PAGES: PageDef[] = [
+  // ---------------------------------------------------------------- top
+  { path: "/dashboard", name: "Dashboard", icon: LayoutDashboard, module: "foundation", status: "built", access: { admin: true, teacher: true }, menu: { admin: "top", teacher: "top" }, description: "Overview and quick actions." },
+
+  // ---------------------------------------------------------------- teacher: my work
+  { path: "/my/classes", name: "My classes", icon: School, module: "foundation", status: "built", access: { teacher: true }, menu: { teacher: "My work" }, description: "Your sections and the subjects you teach in each." },
+  { path: "/my/timetable", name: "My timetable", icon: CalendarClock, module: "timetable", status: "planned", access: { teacher: true }, menu: { teacher: "My work" }, description: "Your weekly periods.", teacherDescription: "Your own weekly periods across the sections you teach." },
+  { path: "/my/students", name: "My students", icon: GraduationCap, module: "students", status: "planned", access: { teacher: true }, menu: { teacher: "My work" }, description: "Students of your sections.", teacherDescription: "Students of your own sections only: profiles, guardian phone numbers and addresses. No government ID numbers." },
+  { path: "/attendance", name: "Attendance", icon: CalendarCheck, module: "attendance", status: "planned", access: { admin: true, teacher: true }, menu: { admin: "Academics", teacher: "My work" }, description: "Morning and afternoon attendance for every section and date, including corrections and substitute marking.", teacherDescription: "Mark the morning or afternoon session for your own sections, for today only (the session your timetable gives you)." },
+  { path: "/marks", name: "Marks entry", icon: ClipboardPen, module: "exams", status: "planned", access: { teacher: true }, menu: { teacher: "My work" }, description: "Enter marks.", teacherDescription: "Enter marks for the subjects you teach in your own sections, until the Admin locks the exam." },
+  { path: "/my/diary-notices", name: "Diary & notices", icon: NotebookPen, module: "notices", status: "planned", access: { teacher: true }, menu: { teacher: "My work" }, description: "Diary and notices.", teacherDescription: "Read the diary for your own sections and the school notices (view only)." },
+  { path: "/my/holidays", name: "Holiday list", icon: CalendarDays, module: "foundation", status: "built", access: { admin: true, teacher: true }, menu: { teacher: "My work" }, description: "Holidays of the current academic year." },
+
+  // ---------------------------------------------------------------- students
+  { path: "/students", name: "Students", icon: GraduationCap, module: "students", status: "planned", access: { admin: true, duty: "student_records" }, menu: { admin: "Students", teacher: "Students" }, description: "Search, filter, add, edit, import and export students; profiles with guardians, siblings, documents and enrolment history." },
+  { path: "/students/import", name: "Import students", icon: FileSpreadsheet, module: "students", status: "planned", access: { admin: true, duty: "student_records" }, menu: { teacher: "Students" }, description: "Excel template with allowed values, row-by-row validation preview, error report and safe re-import without duplicates." },
+  { path: "/students/promotion", name: "Promotion", icon: ArrowUpCircle, module: "students", status: "planned", access: { admin: true }, menu: { admin: "Students" }, description: "Move students to the next class at year end (promote, detain, mark left / TC issued)." },
+  { path: "/students/certificates", name: "Certificates", icon: FileBadge, module: "students", status: "planned", access: { admin: true, duty: "certificates_idcards" }, menu: { admin: "Students", teacher: "Students" }, description: "Transfer, bonafide and study certificates with numbering and print layout." },
+  { path: "/students/id-cards", name: "ID cards", icon: IdCard, module: "students", status: "planned", access: { admin: true, duty: "certificates_idcards" }, menu: { admin: "Students", teacher: "Students" }, description: "Print student ID cards by class or selection." },
+
+  // ---------------------------------------------------------------- academics
+  { path: "/timetable", name: "Timetable", icon: CalendarClock, module: "timetable", status: "planned", access: { admin: true, duty: "timetable_edit" }, menu: { admin: "Academics", teacher: "Academics" }, description: "Bell schedule and section timetables, with teacher clash checks." },
+  { path: "/attendance/all-classes", name: "All-class attendance", icon: CalendarCheck, module: "attendance", status: "planned", access: { admin: true, duty: "all_class_attendance" }, menu: { teacher: "Academics" }, description: "Mark or correct attendance for any section, session and date (covers absent teachers; marked as substitute)." },
+  { path: "/exams", name: "Exams & marks", icon: BookOpenCheck, module: "exams", status: "planned", access: { admin: true, duty: "all_class_marks" }, menu: { admin: "Academics", teacher: "Academics" }, description: "Exam names, dates, subjects and maximum marks; marks for every class until the Admin locks the exam." },
+  { path: "/report-cards", name: "Report cards", icon: ScrollText, module: "exams", status: "planned", access: { admin: true }, menu: { admin: "Academics" }, description: "Generate and publish report cards using the configurable layout and grading scale." },
+  { path: "/diary", name: "Diary", icon: NotebookPen, module: "notices", status: "planned", access: { admin: true, duty: "notices_diary" }, menu: { admin: "Academics", teacher: "Academics" }, description: "Add, edit and publish diary entries for sections (deleting is Admin only)." },
+  { path: "/notices", name: "Notices", icon: Megaphone, module: "notices", status: "planned", access: { admin: true, duty: "notices_diary" }, menu: { admin: "Academics", teacher: "Academics" }, description: "Add, edit and publish school notices for classes, sections or staff (deleting is Admin only)." },
+
+  // ---------------------------------------------------------------- fees
+  { path: "/fees/collect", name: "Collect fee", icon: Wallet, module: "fees", status: "planned", access: { admin: true, duty: "fee_collection" }, menu: { admin: "Fees", teacher: "Fees" }, description: "Look up any student, collect fees and print a receipt." },
+  { path: "/fees/receipts", name: "Receipts", icon: Receipt, module: "fees", status: "planned", access: { admin: true, duty: "fee_collection" }, menu: { admin: "Fees", teacher: "Fees" }, description: "Search and reprint receipts (cancelling a receipt is Admin only)." },
+  { path: "/fees/dues", name: "Dues", icon: BadgeIndianRupee, module: "fees", status: "planned", access: { admin: true, duty: "fee_collection" }, menu: { admin: "Fees", teacher: "Fees" }, description: "Outstanding fees by class, student and installment." },
+  { path: "/fees/setup", name: "Fee setup", icon: Settings, module: "fees", status: "planned", access: { admin: true }, menu: { admin: "Fees" }, description: "Fee heads, installments and due dates, and the fee plan per class." },
+  { path: "/fees/concessions", name: "Concessions", icon: Percent, module: "fees", status: "planned", access: { admin: true }, menu: { admin: "Fees" }, description: "Concession types and which students receive them." },
+
+  // ---------------------------------------------------------------- staff
+  { path: "/staff", name: "Staff list", icon: Users, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "Staff" }, description: "Staff records, logins and teacher duties." },
+  { path: "/staff/attendance", name: "Staff attendance", icon: UserCheck, module: "attendance", status: "planned", access: { admin: true }, menu: { admin: "Staff" }, description: "Daily staff attendance with in and out times." },
+  { path: "/staff/leave", name: "Leave", icon: FileClock, module: "attendance", status: "planned", access: { admin: true }, menu: { admin: "Staff" }, description: "Staff leave requests, approvals and balances (approval is Admin only)." },
+
+  // ---------------------------------------------------------------- reports
+  { path: "/reports", name: "Reports", icon: BarChart3, module: "reports", status: "planned", access: { admin: true }, menu: { admin: "Reports" }, description: "Attendance %, class strength, fee collection, defaulters and results analysis." },
+  { path: "/reports/government-export", name: "Government data export", icon: ShieldCheck, module: "students", status: "planned", access: { admin: true }, menu: { admin: "Reports" }, description: "UDISE+ / AP Child Info format export. IDs masked unless Admin chooses otherwise; every export is logged." },
+
+  // ---------------------------------------------------------------- school setup
+  { path: "/setup/academic-years", name: "Academic years & holidays", icon: CalendarDays, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "School setup" }, description: "Academic years and their holidays." },
+  { path: "/setup/classes", name: "Classes & sections", icon: School, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "School setup" }, description: "Classes and their sections per year." },
+  { path: "/setup/subjects", name: "Subjects", icon: BookOpen, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "School setup" }, description: "Subjects and which classes study them." },
+  { path: "/setup/assignments", name: "Teacher assignments", icon: ClipboardList, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "School setup" }, description: "Which teacher teaches which subject in each section." },
+
+  // ---------------------------------------------------------------- administration
+  { path: "/settings", name: "School settings", icon: Settings, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "Administration" }, description: "School details, branding and calendar settings." },
+  { path: "/audit-log", name: "Audit log", icon: UserRound, module: "audit", status: "planned", access: { admin: true }, menu: { admin: "Administration" }, description: "Who changed what and when, across every module, including exports and duty changes." },
+  { path: "/roadmap", name: "Roadmap", icon: MapIcon, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "Administration" }, description: "Every module with its pages and progress." },
+];
+
+export type Who = { role: AppRole; duties: readonly Duty[] };
+
+/** May this person open this page? (Placeholders and the menu use this.) */
+export function canOpenPage(page: PageDef, who: Who): boolean {
+  const a = page.access;
+  if (who.role === "admin") return !!a.admin;
+  // dormant computer_staff role = every duty (old Phase-1 access)
+  if (who.role === "computer_staff") return !!a.duty;
+  return !!a.teacher || (!!a.duty && who.duties.includes(a.duty));
+}
+
+/** Plain-language "who can use this page". */
+export function whoCanUse(page: PageDef): string[] {
+  const out: string[] = [];
+  if (page.access.admin) out.push("Admin");
+  if (page.access.teacher) out.push("Teachers (own classes only)");
+  if (page.access.duty) out.push(`Teachers with the “${DUTY_INFO[page.access.duty].label}” duty`);
+  return out;
+}
+
+export function moduleName(id: ModuleId) {
+  return MODULES.find((m) => m.id === id)?.name ?? id;
+}
+
+export function findPage(path: string) {
+  return PAGES.find((p) => p.path === path);
+}
+
+export type MenuGroup = { label?: string; items: PageDef[] };
+
+/** The sidebar for this person, built from PAGES. */
+export function buildMenu(who: Who): MenuGroup[] {
+  const isAdmin = who.role === "admin";
+  const order: readonly string[] = isAdmin ? ADMIN_GROUPS : TEACHER_GROUPS;
+  const placed = PAGES.filter((p) => canOpenPage(p, who)).map((p) => ({ p, g: isAdmin ? p.menu.admin : p.menu.teacher })).filter((x) => x.g);
+  const groups: MenuGroup[] = [{ items: placed.filter((x) => x.g === "top").map((x) => x.p) }];
+  for (const label of order) {
+    const items = placed.filter((x) => x.g === label).map((x) => x.p);
+    if (items.length) groups.push({ label, items });
+  }
+  return groups.filter((g) => g.items.length);
+}
