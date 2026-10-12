@@ -2,7 +2,7 @@
 import { startTransition, useActionState, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Save, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Save, Trash2 } from "lucide-react";
 import { initialActionState, type ActionState, cn } from "@/lib/utils";
 import { FormMessage } from "./form";
 import { Button } from "./button";
@@ -37,6 +37,8 @@ export function ActionForm({
   layout = "inline",
   onSuccess,
   onCancel,
+  readOnly = false,
+  onEditRequest,
   children,
 }: {
   action: Action;
@@ -46,6 +48,9 @@ export function ActionForm({
   layout?: "inline" | "drawer";
   onSuccess?: () => void;
   onCancel?: () => void;
+  /** Drawer "View" mode: fields disabled, footer shows Close (+ Edit). */
+  readOnly?: boolean;
+  onEditRequest?: () => void;
   children: (fieldErrors: Record<string, string[] | undefined>) => React.ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(action, initialActionState);
@@ -65,7 +70,25 @@ export function ActionForm({
   if (layout === "drawer") {
     return (
       <form ref={ref} onSubmit={onSubmit} className="flex h-full flex-col">
-        <div className={cn("flex-1 space-y-6 overflow-y-auto px-5 py-5", className)}>{children(state.fieldErrors ?? {})}</div>
+        <div className={cn("flex-1 overflow-y-auto px-5 py-5", className)}>
+          <fieldset disabled={readOnly} className="min-w-0 space-y-6">
+            {children(state.fieldErrors ?? {})}
+          </fieldset>
+        </div>
+        {readOnly ? (
+          <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-border bg-cream-50/95 px-5 py-3 backdrop-blur">
+            {onCancel && (
+              <Button type="button" variant="secondary" onClick={onCancel}>
+                Close
+              </Button>
+            )}
+            {onEditRequest && (
+              <Button type="button" onClick={onEditRequest}>
+                <Pencil className="size-4" aria-hidden /> Edit
+              </Button>
+            )}
+          </div>
+        ) : (
         <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-border bg-cream-50/95 px-5 py-3 backdrop-blur">
           <FormMessage state={state.ok ? {} : state} />
           <div className="ml-auto flex gap-2">
@@ -79,6 +102,7 @@ export function ActionForm({
             </Button>
           </div>
         </div>
+        )}
       </form>
     );
   }

@@ -17,6 +17,7 @@ export function MyClassesTable({ rows, yearName }: { rows: MyClassRow[]; yearNam
       ),
       sortValue: (r) => r.classOrder * 100 + r.section.charCodeAt(0),
       exportValue: (r) => `${r.className} ${r.section}`,
+      className: "whitespace-nowrap",
     },
     { id: "medium", header: "Medium", cell: (r) => (r.medium ? <StatusChip status="declared" label={r.medium} /> : <span className="text-muted">Not set</span>), sortValue: (r) => r.medium ?? "" },
     {
@@ -48,6 +49,11 @@ export function MyClassesTable({ rows, yearName }: { rows: MyClassRow[]; yearNam
       searchText={(r) => `${r.className} ${r.section} ${r.subjects.join(" ")}`}
       filters={[{ id: "role", label: "My role", options: [{ value: "ct", label: "Class teacher" }, { value: "st", label: "Subject teacher" }], match: (r, v) => (v === "ct") === r.isClassTeacher }]}
       exportName={`my-classes-${yearName}`}
+      rowActions={(r) => [
+        { id: "view", kind: "view", label: "View students", href: `/my/students?section=${r.sectionId}` },
+      ]}
+      rowHref={(r) => `/my/students?section=${r.sectionId}`}
+      rowLabel={(r) => `${r.className} – ${r.section}`}
       emptyTitle="No classes assigned yet"
       emptyMessage="The Admin hasn't assigned you to a section yet."
     />

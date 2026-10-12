@@ -285,3 +285,17 @@ export async function deleteAssignments(ids: string[]): Promise<ActionState> {
   if (error) return { error: friendlyDbError(error) };
   return done("/setup/assignments", `Removed ${count ?? parsed.data.length} assignment(s).`);
 }
+
+/** Change the teacher or periods of an existing assignment (Admin). */
+export async function updateAssignment(_: ActionState, fd: FormData): Promise<ActionState> {
+  await requireCapability("assignments.edit");
+  const parsed = z
+    .object({ id: uuid, staff_id: z.string().uuid("Pick a teacher"), periods_per_week: optionalInt })
+    .safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return invalid(parsed.error);
+  const { id, ...patch } = parsed.data;
+  const supabase = await createClient();
+  const { error } = await supabase.from("teacher_assignments").update(patch).eq("id", id);
+  if (error) return { error: error.code === "23505" ? "That teacher already teaches this subject in this section." : friendlyDbError(error) };
+  return done("/setup/assignments", "Assignment updated.");
+}

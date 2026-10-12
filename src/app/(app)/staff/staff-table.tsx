@@ -2,11 +2,11 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Pencil, UserPlus } from "lucide-react";
+import { KeyRound, UserPlus } from "lucide-react";
+import type { RowAction } from "@/components/data-table/data-table";
 import { DataTable, type Column } from "@/components/data-table/data-table";
 import { Drawer } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
 import { RoleBadge, StatusChip } from "@/components/ui/card";
 import { useDrawer } from "@/components/ui/use-drawer";
 import { formatDate } from "@/lib/utils";
@@ -36,6 +36,7 @@ export function StaffTable({ rows, editable }: { rows: StaffRow[]; editable: boo
         </Link>
       ),
       sortValue: (r) => r.full_name,
+      className: "whitespace-nowrap",
     },
     { id: "designation", header: "Designation", cell: (r) => r.designation ?? "—", sortValue: (r) => r.designation ?? "" },
     { id: "department", header: "Department", cell: (r) => r.department ?? "—", sortValue: (r) => r.department ?? "", defaultHidden: true },
@@ -57,24 +58,23 @@ export function StaffTable({ rows, editable }: { rows: StaffRow[]; editable: boo
       sortValue: (r) => (r.app_role === "admin" ? 99 : r.duties),
     },
   ];
-  if (editable) {
-    columns.push({
-      id: "actions",
-      header: "Actions",
-      hideable: false,
-      align: "right",
-      cell: (r) => (
-        <IconButton label={`Edit ${r.full_name}`} onClick={() => drawer.openEdit(r)}>
-          <Pencil />
-        </IconButton>
-      ),
-    });
-  }
+  const staffActions = (r: StaffRow): RowAction[] => [
+    { id: "view", kind: "view", label: "View", href: `/staff/${r.id}` },
+    ...(editable
+      ? ([
+          { id: "edit", kind: "edit", label: "Edit details", onClick: () => drawer.openEdit(r) },
+          { id: "access", kind: "menu", label: "Login & duties", icon: KeyRound, href: `/staff/${r.id}` },
+        ] satisfies RowAction[])
+      : []),
+  ];
   const designations = [...new Set(rows.map((r) => r.designation).filter(Boolean))].sort() as string[];
   return (
     <>
       <DataTable
         id="staff"
+        rowActions={staffActions}
+        rowHref={(r) => `/staff/${r.id}`}
+        rowLabel={(r) => r.full_name}
         rows={rows}
         columns={columns}
         getRowId={(r) => r.id}

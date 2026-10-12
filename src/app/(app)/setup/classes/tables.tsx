@@ -1,13 +1,14 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Languages, Pencil, Plus } from "lucide-react";
+import { Languages, Plus, Trash2 } from "lucide-react";
+import { runFormAction } from "@/components/data-table/run-action";
+import type { RowAction } from "@/components/data-table/data-table";
 import { DataTable, type Column } from "@/components/data-table/data-table";
 import { Drawer } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
 import { StatusChip } from "@/components/ui/card";
-import { ActionForm, DeleteButton, FormSection } from "@/components/ui/action-form";
+import { ActionForm, FormSection } from "@/components/ui/action-form";
 import { Field, Input, Select } from "@/components/ui/form";
 import { useDrawer } from "@/components/ui/use-drawer";
 import { deleteClass, deleteSection, saveClass, saveSection, setSectionsMedium } from "@/features/setup/actions";
@@ -39,7 +40,7 @@ export function SectionsTable({
   const router = useRouter();
 
   const columns: Column<SectionRow>[] = [
-    { id: "class", header: "Class", cell: (r) => <span className="font-medium text-navy-900">{r.className}</span>, sortValue: (r) => r.classOrder, exportValue: (r) => r.className, hideable: false },
+    { id: "class", header: "Class", cell: (r) => <span className="font-medium text-navy-900">{r.className}</span>, sortValue: (r) => r.classOrder, exportValue: (r) => r.className, hideable: false, className: "whitespace-nowrap" },
     { id: "section", header: "Section", cell: (r) => r.name, sortValue: (r) => r.name },
     {
       id: "medium",
@@ -47,32 +48,37 @@ export function SectionsTable({
       cell: (r) => (r.medium ? <StatusChip status="declared" label={r.medium} /> : <StatusChip status="inactive" label="Not set" />),
       sortValue: (r) => r.medium ?? "",
     },
-    { id: "teacher", header: "Class teacher", cell: (r) => r.classTeacher ?? <span className="text-muted">Not assigned</span>, sortValue: (r) => r.classTeacher ?? "" },
+    { id: "teacher", header: "Class teacher", cell: (r) => r.classTeacher ?? <span className="text-muted">Not assigned</span>, sortValue: (r) => r.classTeacher ?? "", className: "whitespace-nowrap" },
     { id: "students", header: "Students", align: "right", cell: (r) => (r.students === null ? <span className="text-muted">—</span> : r.students), sortValue: (r) => r.students ?? -1, exportValue: (r) => r.students ?? "" },
     { id: "room", header: "Room", cell: (r) => r.room ?? "—", sortValue: (r) => r.room ?? "", defaultHidden: true },
     { id: "capacity", header: "Capacity", align: "right", cell: (r) => r.capacity ?? "—", sortValue: (r) => r.capacity ?? null, defaultHidden: true },
   ];
-  if (editable) {
-    columns.push({
-      id: "actions",
-      header: "Actions",
-      hideable: false,
-      align: "right",
-      cell: (r) => (
-        <div className="flex justify-end gap-0.5">
-          <IconButton label={`Edit ${r.className} ${r.name}`} onClick={() => drawer.openEdit(r)}>
-            <Pencil />
-          </IconButton>
-          <DeleteButton action={deleteSection} id={r.id} iconOnly label="Delete section" title={`Delete ${r.className} – ${r.name}?`} confirmText="Teacher assignments for this section are removed too." />
-        </div>
-      ),
-    });
-  }
+
+  const sectionActions = (r: SectionRow): RowAction[] => [
+    { id: "view", kind: "view", label: "View", onClick: () => drawer.openView(r) },
+    ...(editable
+      ? ([
+          { id: "edit", kind: "edit", label: "Edit", onClick: () => drawer.openEdit(r) },
+          {
+            id: "delete",
+            kind: "menu",
+            label: "Delete section",
+            icon: Trash2,
+            tone: "danger",
+            confirm: { title: `Delete ${r.className} – ${r.name}?`, message: "Teacher assignments for this section are removed too. Sections with students can't be deleted.", confirmLabel: "Delete" },
+            onClick: () => runFormAction(deleteSection, { id: r.id }, router.refresh),
+          },
+        ] satisfies RowAction[])
+      : []),
+  ];
 
   return (
     <>
       <DataTable
         id="sections"
+        rowActions={sectionActions}
+        onRowClick={(r) => drawer.openView(r)}
+        rowLabel={(r) => `${r.className} – ${r.name}`}
         rows={rows}
         columns={columns}
         getRowId={(r) => r.id}
@@ -115,14 +121,14 @@ export function SectionsTable({
           )
         }
       />
-      {editable && (
+      {(editable || drawer.readOnly) && (
         <Drawer
           open={drawer.open}
           onClose={drawer.close}
-          title={drawer.item ? `Edit ${drawer.item.className} – ${drawer.item.name}` : "Add section"}
+          title={drawer.item ? `${drawer.readOnly ? "" : "Edit "}${drawer.item.className} – ${drawer.item.name}` : "Add section"}
           description={`Academic year ${yearName}`}
         >
-          <ActionForm key={drawer.item?.id ?? "new"} action={saveSection} layout="drawer" submitLabel={drawer.item ? "Save section" : "Add section"} onCancel={drawer.close} onSuccess={drawer.close}>
+          <ActionForm key={`${drawer.item?.id ?? "new"}-${drawer.mode}`} action={saveSection} layout="drawer" submitLabel={drawer.item ? "Save section" : "Add section"} onCancel={drawer.close} onSuccess={drawer.close} readOnly={drawer.readOnly} onEditRequest={editable ? drawer.toEdit : undefined}>
             {(fe) => {
               const s = drawer.item;
               return (
@@ -187,33 +193,38 @@ export function SectionsTable({
 // ------------------------------------------------------------------ classes
 export function ClassesTable({ rows, editable }: { rows: ClassRow[]; editable: boolean }) {
   const drawer = useDrawer<ClassRow>();
+  const router = useRouter();
+  const classActions = (r: ClassRow): RowAction[] => [
+    { id: "view", kind: "view", label: "View", onClick: () => drawer.openView(r) },
+    ...(editable
+      ? ([
+          { id: "edit", kind: "edit", label: "Edit", onClick: () => drawer.openEdit(r) },
+          {
+            id: "delete",
+            kind: "menu",
+            label: "Delete class",
+            icon: Trash2,
+            tone: "danger",
+            confirm: { title: `Delete ${r.name}?`, message: "Only possible when the class has no sections. Otherwise mark it inactive.", confirmLabel: "Delete" },
+            onClick: () => runFormAction(deleteClass, { id: r.id }, router.refresh),
+          },
+        ] satisfies RowAction[])
+      : []),
+  ];
   const columns: Column<ClassRow>[] = [
     { id: "order", header: "Order", align: "right", cell: (r) => <span className="tabular-nums text-muted">{r.sort_order}</span>, sortValue: (r) => r.sort_order },
-    { id: "name", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name },
+    { id: "name", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name, className: "whitespace-nowrap" },
     { id: "short", header: "Short name", cell: (r) => r.short_name ?? "—", sortValue: (r) => r.short_name ?? "" },
     { id: "sections", header: "Sections (this year)", align: "right", cell: (r) => r.sectionCount, sortValue: (r) => r.sectionCount },
     { id: "status", header: "Status", cell: (r) => <StatusChip status={r.is_active ? "active" : "inactive"} />, sortValue: (r) => (r.is_active ? "active" : "inactive") },
   ];
-  if (editable) {
-    columns.push({
-      id: "actions",
-      header: "Actions",
-      hideable: false,
-      align: "right",
-      cell: (r) => (
-        <div className="flex justify-end gap-0.5">
-          <IconButton label={`Edit ${r.name}`} onClick={() => drawer.openEdit(r)}>
-            <Pencil />
-          </IconButton>
-          <DeleteButton action={deleteClass} id={r.id} iconOnly label="Delete class" title={`Delete ${r.name}?`} confirmText="Only possible when the class has no sections. Otherwise mark it inactive." />
-        </div>
-      ),
-    });
-  }
   return (
     <>
       <DataTable
         id="classes"
+        rowActions={classActions}
+        onRowClick={(r) => drawer.openView(r)}
+        rowLabel={(r) => r.name}
         rows={rows}
         columns={columns}
         getRowId={(r) => r.id}
@@ -230,9 +241,9 @@ export function ClassesTable({ rows, editable }: { rows: ClassRow[]; editable: b
           )
         }
       />
-      {editable && (
-        <Drawer open={drawer.open} onClose={drawer.close} title={drawer.item ? `Edit ${drawer.item.name}` : "Add class"}>
-          <ActionForm key={drawer.item?.id ?? "new"} action={saveClass} layout="drawer" submitLabel={drawer.item ? "Save class" : "Add class"} onCancel={drawer.close} onSuccess={drawer.close}>
+      {(editable || drawer.readOnly) && (
+        <Drawer open={drawer.open} onClose={drawer.close} title={drawer.item ? `${drawer.readOnly ? "" : "Edit "}${drawer.item.name}` : "Add class"}>
+          <ActionForm key={`${drawer.item?.id ?? "new"}-${drawer.mode}`} action={saveClass} layout="drawer" submitLabel={drawer.item ? "Save class" : "Add class"} onCancel={drawer.close} onSuccess={drawer.close} readOnly={drawer.readOnly} onEditRequest={editable ? drawer.toEdit : undefined}>
             {(fe) => {
               const c = drawer.item;
               return (

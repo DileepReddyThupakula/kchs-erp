@@ -20,6 +20,12 @@ import { cn } from "@/lib/utils";
 import { exportSheets, type ExportCell, type ExportFormat } from "@/lib/export";
 import { logExport } from "@/features/audit/actions";
 import { EmptyState } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import { Modal } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { ROW_CLICK_IGNORE, RowActionsCell, type RowAction } from "./row-actions";
+
+export type { RowAction } from "./row-actions";
 
 export type Column<T> = {
   id: string;
@@ -113,6 +119,10 @@ export function DataTable<T>({
   exportDetails,
   toolbar,
   customExport,
+  rowActions,
+  rowHref,
+  onRowClick,
+  rowLabel,
 }: {
   /** Stable id: remembers column visibility per table. */
   id: string;
@@ -136,7 +146,25 @@ export function DataTable<T>({
   toolbar?: React.ReactNode;
   /** Replace the built-in export menu (e.g. a field picker). Gets selected rows, or all filtered rows. */
   customExport?: (rows: T[], info: { selectedOnly: boolean; filters: Record<string, string>; search: string }) => void;
+  /** Actions column (pinned right, never hidden). Return only what this user may do. */
+  rowActions?: (row: T) => RowAction[];
+  /** Whole row opens this page… */
+  rowHref?: (row: T) => string;
+  /** …or runs this (e.g. open a read-only drawer). */
+  onRowClick?: (row: T) => void;
+  /** Screen-reader name of a row, used in action labels (e.g. the student's name). */
+  rowLabel?: (row: T) => string;
 }) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState<RowAction | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const runAction = (a: RowAction) => {
+    if (a.confirm) return setConfirming(a);
+    if (a.href) return router.push(a.href);
+    void a.onClick?.();
+  };
+  const clickable = !!(rowHref || onRowClick);
+  const openRow = (r: T) => (rowHref ? router.push(rowHref(r)) : onRowClick?.(r));
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<Record<string, string>>(initialFilters);
   const [sort, setSort] = useState<SortState>(null);
@@ -442,6 +470,11 @@ export function DataTable<T>({
                       )}
                     </th>
                   ))}
+                  {rowActions && (
+                    <th scope="col" className="sticky right-0 z-[1] whitespace-nowrap bg-cream-100 px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-ink-muted shadow-[-1px_0_0_var(--color-line)]">
+                      Actions
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -449,9 +482,25 @@ export function DataTable<T>({
                   const rid = getRowId(r);
                   const isSel = selected.has(rid);
                   return (
-                    <tr key={rid} className={cn("border-t border-border transition-colors hover:bg-cream-50", isSel && "bg-gold-50/70 hover:bg-gold-50")}>
+                    <tr
+                      key={rid}
+                      onClick={
+                        clickable
+                          ? (e) => {
+                              if ((e.target as HTMLElement).closest(ROW_CLICK_IGNORE)) return;
+                              if (window.getSelection()?.toString()) return; // selecting text, not opening
+                              openRow(r);
+                            }
+                          : undefined
+                      }
+                      className={cn(
+                        "group border-t border-border transition-colors hover:bg-cream-50",
+                        isSel && "bg-gold-50/70 hover:bg-gold-50",
+                        clickable && "cursor-pointer",
+                      )}
+                    >
                       {selectable && (
-                        <td className="px-3 py-1.5">
+                        <td className="px-3 py-1.5" data-row-click-ignore>
                           <input
                             type="checkbox"
                             aria-label="Select row"
@@ -476,6 +525,16 @@ export function DataTable<T>({
                           {c.cell(r)}
                         </td>
                       ))}
+                      {rowActions && (
+                        <td
+                          className={cn(
+                            "sticky right-0 whitespace-nowrap px-2 py-1 shadow-[-1px_0_0_var(--color-line)] transition-colors",
+                            isSel ? "bg-gold-50" : "bg-surface group-hover:bg-cream-50",
+                          )}
+                        >
+                          <RowActionsCell actions={rowActions(r)} rowLabel={rowLabel?.(r) ?? "this row"} onRun={runAction} />
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -527,6 +586,37 @@ export function DataTable<T>({
           </div>
         </div>
       )}
+      <Modal
+        open={!!confirming}
+        onClose={() => !confirmBusy && setConfirming(null)}
+        title={confirming?.confirm?.title ?? ""}
+        footer={
+          <>
+            <Button variant="secondary" disabled={confirmBusy} onClick={() => setConfirming(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={confirming?.confirm?.danger === false ? "primary" : "danger"}
+              loading={confirmBusy}
+              onClick={async () => {
+                if (!confirming) return;
+                setConfirmBusy(true);
+                try {
+                  if (confirming.onClick) await confirming.onClick();
+                  else if (confirming.href) router.push(confirming.href);
+                } finally {
+                  setConfirmBusy(false);
+                  setConfirming(null);
+                }
+              }}
+            >
+              {confirming?.confirm?.confirmLabel ?? confirming?.label}
+            </Button>
+          </>
+        }
+      >
+        {confirming?.confirm?.message}
+      </Modal>
     </div>
   );
 }

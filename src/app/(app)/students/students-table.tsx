@@ -3,7 +3,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRightLeft, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { ArrowRightLeft, FileSpreadsheet, FileText, Loader2, RefreshCcw } from "lucide-react";
+import type { RowAction } from "@/components/data-table/data-table";
+import { StatusDialog } from "./[id]/client";
 import { DataTable, type Column, type FilterDef } from "@/components/data-table/data-table";
 import { Modal } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,9 @@ export function StudentsTable({
   definitions = [],
   yearName,
   toolbar,
+  canEdit = false,
+  canChangeStatus = false,
+  initialSection,
 }: {
   rows: StudentRow[];
   /** manage = Admin / student_records (all students); mine = own sections only */
@@ -46,10 +51,22 @@ export function StudentsTable({
   definitions?: StudentFieldDefinition[];
   yearName: string;
   toolbar?: React.ReactNode;
+  /** Admin / student_records (the server re-checks). */
+  canEdit?: boolean;
+  /** Admin only. */
+  canChangeStatus?: boolean;
+  /** Pre-select a section filter (e.g. coming from My classes). */
+  initialSection?: string;
 }) {
   const manage = mode === "manage";
   const [exportRows, setExportRows] = useState<{ rows: StudentRow[]; info: Record<string, unknown> } | null>(null);
   const [moveRows, setMoveRows] = useState<{ rows: StudentRow[]; clear: () => void } | null>(null);
+  const [statusFor, setStatusFor] = useState<StudentRow | null>(null);
+  const studentActions = (r: StudentRow): RowAction[] => [
+    { id: "view", kind: "view", label: "View", href: `/students/${r.id}` },
+    ...(canEdit ? ([{ id: "edit", kind: "edit", label: "Edit", href: `/students/${r.id}/edit` }] satisfies RowAction[]) : []),
+    ...(canChangeStatus ? ([{ id: "status", kind: "menu", label: "Change status", icon: RefreshCcw, onClick: () => setStatusFor(r) }] satisfies RowAction[]) : []),
+  ];
   const classes = useMemo(() => [...new Map(sections.map((s) => [s.classId, { id: s.classId, name: s.className, order: s.classOrder }])).values()].sort((a, b) => a.order - b.order), [sections]);
 
   const columns: Column<StudentRow>[] = [
@@ -60,13 +77,13 @@ export function StudentsTable({
       cell: (r) => (
         <Link href={`/students/${r.id}`} className="flex items-center gap-2.5 font-medium text-navy-900 hover:underline">
           <Avatar name={r.full_name} />
-          <span>{r.full_name}</span>
+          <span className="whitespace-nowrap">{r.full_name}</span>
         </Link>
       ),
       sortValue: (r) => r.full_name,
     },
     { id: "adm", header: "Adm no", cell: (r) => <span className="font-mono text-xs">{r.admission_no}</span>, sortValue: (r) => r.admission_no },
-    { id: "class", header: "Class", cell: (r) => (r.className ? classLabel(r) : <span className="text-muted">Not enrolled</span>), sortValue: (r) => r.classOrder * 100 + (r.section?.charCodeAt(0) ?? 0), exportValue: (r) => classLabel(r) },
+    { id: "class", header: "Class", cell: (r) => (r.className ? classLabel(r) : <span className="text-muted">Not enrolled</span>), sortValue: (r) => r.classOrder * 100 + (r.section?.charCodeAt(0) ?? 0), exportValue: (r) => classLabel(r), className: "whitespace-nowrap" },
     { id: "roll", header: "Roll", align: "right", cell: (r) => r.rollNo ?? "—", sortValue: (r) => r.rollNo ?? 9999, exportValue: (r) => r.rollNo },
     { id: "gender", header: "Gender", cell: (r) => <span className="capitalize">{r.gender}</span>, sortValue: (r) => r.gender, defaultHidden: true },
     { id: "dob", header: "Date of birth", cell: (r) => formatDate(r.date_of_birth), sortValue: (r) => r.date_of_birth, defaultHidden: manage },
@@ -76,7 +93,7 @@ export function StudentsTable({
       cell: (r) => r.guardians[0] ? (<span>{r.guardians[0].name} <span className="text-xs capitalize text-muted">({r.guardians[0].relation})</span></span>) : <span className="text-muted">—</span>,
       sortValue: (r) => r.guardians[0]?.name ?? "",
     },
-    { id: "phone", header: "Phone", cell: (r) => r.primaryPhone ? <a href={`tel:${r.primaryPhone}`} className="tabular-nums text-navy-700 hover:underline">{r.primaryPhone}</a> : "—", sortValue: (r) => r.primaryPhone ?? "" },
+    { id: "phone", className: "whitespace-nowrap", header: "Phone", cell: (r) => r.primaryPhone ? <a href={`tel:${r.primaryPhone}`} className="tabular-nums text-navy-700 hover:underline">{r.primaryPhone}</a> : "—", sortValue: (r) => r.primaryPhone ?? "" },
     { id: "address", header: "Address", cell: (r) => <span className="line-clamp-1 max-w-56">{r.address ?? "—"}</span>, sortValue: (r) => r.address ?? "", defaultHidden: manage },
   ];
   if (manage) {
@@ -117,13 +134,16 @@ export function StudentsTable({
     <>
       <DataTable
         id={manage ? "students" : "my-students"}
+        rowActions={studentActions}
+        rowHref={(r) => `/students/${r.id}`}
+        rowLabel={(r) => r.full_name}
         rows={rows}
         columns={columns}
         getRowId={(r) => r.id}
         searchText={(r) => `${r.full_name} ${r.admission_no} ${r.guardians.map((g) => `${g.name} ${g.phone ?? ""}`).join(" ")}`}
         searchPlaceholder="Search name, admission no, phone…"
         filters={filters}
-        initialFilters={manage ? { status: "active" } : {}}
+        initialFilters={{ ...(manage ? { status: "active" } : {}), ...(initialSection ? { section: initialSection } : {}) }}
         pageSize={50}
         selectable
         bulkActions={(sel, clear) => (
@@ -144,6 +164,7 @@ export function StudentsTable({
         toolbar={toolbar}
       />
       {exportRows && <ExportDialog rows={exportRows.rows} info={exportRows.info} manage={manage} definitions={definitions} onClose={() => setExportRows(null)} />}
+      {statusFor && <StatusDialog id={statusFor.id} status={statusFor.status} name={statusFor.full_name} open onClose={() => setStatusFor(null)} />}
       {moveRows && <ChangeSectionDialog rows={moveRows.rows} sections={sections} onClose={() => setMoveRows(null)} onDone={moveRows.clear} />}
     </>
   );

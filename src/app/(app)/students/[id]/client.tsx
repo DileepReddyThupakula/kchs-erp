@@ -77,47 +77,54 @@ export function RevealIdsButton({ studentId }: { studentId: string }) {
 }
 
 /** Admin only: change status (active / left / TC issued / passed out). */
+export function StatusDialog({ id, status, name, open, onClose }: { id: string; status: string; name?: string; open: boolean; onClose: () => void }) {
+  const router = useRouter();
+  return (
+    <Modal open={open} onClose={onClose} title={name ? `Change status: ${name}` : "Change student status"}>
+      <ActionForm
+        key={`${id}-${open}`}
+        action={setStudentStatus}
+        submitLabel="Update status"
+        onSuccess={() => {
+          onClose();
+          router.refresh();
+        }}
+        className="space-y-3"
+      >
+        {(fe) => (
+          <>
+            <input type="hidden" name="id" value={id} />
+            <Field label="Status" name="status" errors={fe.status}>
+              <Select id="status" name="status" defaultValue={status}>
+                {Object.entries(STATUS_LABEL).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Date" name="status_date" errors={fe.status_date} hint="Blank = today (ignored for Active)">
+              <Input id="status_date" name="status_date" type="date" />
+            </Field>
+            <Field label="Reason" name="status_reason" errors={fe.status_reason}>
+              <Input id="status_reason" name="status_reason" placeholder="e.g. Family moved to Kadapa" />
+            </Field>
+            <p className="text-xs text-muted">Students are never deleted; their record and history stay.</p>
+          </>
+        )}
+      </ActionForm>
+    </Modal>
+  );
+}
+
 export function StatusButton({ id, status }: { id: string; status: string }) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
   return (
     <>
       <Button variant="secondary" onClick={() => setOpen(true)}>
         <RefreshCcw className="size-4" /> Change status
       </Button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Change student status">
-        <ActionForm
-          action={setStudentStatus}
-          submitLabel="Update status"
-          onSuccess={() => {
-            setOpen(false);
-            router.refresh();
-          }}
-          className="space-y-3"
-        >
-          {(fe) => (
-            <>
-              <input type="hidden" name="id" value={id} />
-              <Field label="Status" name="status" errors={fe.status}>
-                <Select id="status" name="status" defaultValue={status}>
-                  {Object.entries(STATUS_LABEL).map(([v, l]) => (
-                    <option key={v} value={v}>
-                      {l}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Date" name="status_date" errors={fe.status_date} hint="Blank = today (ignored for Active)">
-                <Input id="status_date" name="status_date" type="date" />
-              </Field>
-              <Field label="Reason" name="status_reason" errors={fe.status_reason}>
-                <Input id="status_reason" name="status_reason" placeholder="e.g. Family moved to Kadapa" />
-              </Field>
-              <p className="text-xs text-muted">Students are never deleted; their record and history stay.</p>
-            </>
-          )}
-        </ActionForm>
-      </Modal>
+      <StatusDialog id={id} status={status} open={open} onClose={() => setOpen(false)} />
     </>
   );
 }

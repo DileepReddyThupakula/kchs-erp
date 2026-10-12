@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GraduationCap, Plus, Upload } from "lucide-react";
 import { requirePage } from "@/features/students/page-guard";
+import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
 import { EmptyState, PageHeader } from "@/components/ui/card";
@@ -45,7 +46,7 @@ export default async function StudentsPage() {
   return (
     <>
       {header}
-      <StudentsTable rows={rows} mode="manage" sections={sections} definitions={definitions} yearName={year.name} />
+      <StudentsTable rows={rows} mode="manage" sections={sections} definitions={definitions} yearName={year.name} canEdit={can(me, "students.edit")} canChangeStatus={can(me, "students.status")} />
     </>
   );
 }

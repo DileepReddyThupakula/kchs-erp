@@ -1,11 +1,13 @@
 "use client";
-import { Pencil, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { runFormAction } from "@/components/data-table/run-action";
+import type { RowAction } from "@/components/data-table/data-table";
+import { Plus, Trash2 } from "lucide-react";
 import { DataTable, type Column } from "@/components/data-table/data-table";
 import { Drawer } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
 import { Badge, StatusChip } from "@/components/ui/card";
-import { ActionForm, DeleteButton, FormSection } from "@/components/ui/action-form";
+import { ActionForm, FormSection } from "@/components/ui/action-form";
 import { Field, Input, Select } from "@/components/ui/form";
 import { useDrawer } from "@/components/ui/use-drawer";
 import { deleteSubject, saveClassSubjects, saveSubject } from "@/features/setup/actions";
@@ -25,34 +27,39 @@ const TYPE_LABEL: Record<string, string> = { scholastic: "Scholastic", co_schola
 
 export function SubjectsTable({ rows, editable }: { rows: SubjectRow[]; editable: boolean }) {
   const drawer = useDrawer<SubjectRow>();
+  const router = useRouter();
+  const subjectActions = (r: SubjectRow): RowAction[] => [
+    { id: "view", kind: "view", label: "View", onClick: () => drawer.openView(r) },
+    ...(editable
+      ? ([
+          { id: "edit", kind: "edit", label: "Edit", onClick: () => drawer.openEdit(r) },
+          {
+            id: "delete",
+            kind: "menu",
+            label: "Delete subject",
+            icon: Trash2,
+            tone: "danger",
+            confirm: { title: `Delete ${r.name}?`, message: "Only possible when no class or teacher uses it. Otherwise mark it inactive.", confirmLabel: "Delete" },
+            onClick: () => runFormAction(deleteSubject, { id: r.id }, router.refresh),
+          },
+        ] satisfies RowAction[])
+      : []),
+  ];
   const columns: Column<SubjectRow>[] = [
-    { id: "name", header: "Subject", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name },
+    { id: "name", header: "Subject", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name, className: "whitespace-nowrap" },
     { id: "code", header: "Code", cell: (r) => <span className="font-mono text-xs">{r.code ?? "—"}</span>, sortValue: (r) => r.code ?? "" },
     { id: "type", header: "Type", cell: (r) => <StatusChip status={r.type} label={TYPE_LABEL[r.type]} />, sortValue: (r) => TYPE_LABEL[r.type] },
     { id: "classes", header: "Classes", align: "right", cell: (r) => r.classCount, sortValue: (r) => r.classCount },
     { id: "order", header: "Order", align: "right", cell: (r) => r.sort_order, sortValue: (r) => r.sort_order, defaultHidden: true },
     { id: "status", header: "Status", cell: (r) => <StatusChip status={r.is_active ? "active" : "inactive"} />, sortValue: (r) => (r.is_active ? "active" : "inactive") },
   ];
-  if (editable) {
-    columns.push({
-      id: "actions",
-      header: "Actions",
-      hideable: false,
-      align: "right",
-      cell: (r) => (
-        <div className="flex justify-end gap-0.5">
-          <IconButton label={`Edit ${r.name}`} onClick={() => drawer.openEdit(r)}>
-            <Pencil />
-          </IconButton>
-          <DeleteButton action={deleteSubject} id={r.id} iconOnly label="Delete subject" title={`Delete ${r.name}?`} confirmText="Only possible when no class or teacher uses it. Otherwise mark it inactive." />
-        </div>
-      ),
-    });
-  }
   return (
     <>
       <DataTable
         id="subjects"
+        rowActions={subjectActions}
+        onRowClick={(r) => drawer.openView(r)}
+        rowLabel={(r) => r.name}
         rows={rows}
         columns={columns}
         getRowId={(r) => r.id}
@@ -72,9 +79,9 @@ export function SubjectsTable({ rows, editable }: { rows: SubjectRow[]; editable
           )
         }
       />
-      {editable && (
-        <Drawer open={drawer.open} onClose={drawer.close} title={drawer.item ? `Edit ${drawer.item.name}` : "Add subject"}>
-          <ActionForm key={drawer.item?.id ?? "new"} action={saveSubject} layout="drawer" submitLabel={drawer.item ? "Save subject" : "Add subject"} onCancel={drawer.close} onSuccess={drawer.close}>
+      {(editable || drawer.readOnly) && (
+        <Drawer open={drawer.open} onClose={drawer.close} title={drawer.item ? `${drawer.readOnly ? "" : "Edit "}${drawer.item.name}` : "Add subject"}>
+          <ActionForm key={`${drawer.item?.id ?? "new"}-${drawer.mode}`} action={saveSubject} layout="drawer" submitLabel={drawer.item ? "Save subject" : "Add subject"} onCancel={drawer.close} onSuccess={drawer.close} readOnly={drawer.readOnly} onEditRequest={editable ? drawer.toEdit : undefined}>
             {(fe) => {
               const s = drawer.item;
               return (
@@ -128,32 +135,32 @@ export function ClassSubjectsTable({ rows, editable, yearId, subjects }: { rows:
       <span className="text-muted">None</span>
     );
   const columns: Column<ClassLinkRow>[] = [
-    { id: "class", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.order, exportValue: (r) => r.name },
+    { id: "class", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.order, exportValue: (r) => r.name, className: "whitespace-nowrap" },
     { id: "scholastic", header: "Subjects", cell: (r) => chips(r.scholastic), exportValue: (r) => r.scholastic.join(", ") },
     { id: "co", header: "Co-scholastic", cell: (r) => chips(r.coScholastic), exportValue: (r) => r.coScholastic.join(", "), defaultHidden: true },
     { id: "count", header: "Total", align: "right", cell: (r) => r.links.length, sortValue: (r) => r.links.length },
   ];
-  if (editable) {
-    columns.push({
-      id: "actions",
-      header: "Actions",
-      hideable: false,
-      align: "right",
-      cell: (r) => (
-        <IconButton label={`Change subjects for ${r.name}`} onClick={() => drawer.openEdit(r)}>
-          <Pencil />
-        </IconButton>
-      ),
-    });
-  }
   const linked = new Map(drawer.item?.links.map((l) => [l.subject_id, l.is_optional]) ?? []);
   const group = (type: string) => subjects.filter((s) => s.type === type);
   return (
     <>
-      <DataTable id="class-subjects" rows={rows} columns={columns} getRowId={(r) => r.id} searchText={(r) => `${r.name} ${r.scholastic.join(" ")}`} exportName="subjects-by-class" />
-      {editable && drawer.item && (
-        <Drawer open={drawer.open} onClose={drawer.close} title={`Subjects for ${drawer.item.name}`} description="Tick the subjects this class studies this year.">
-          <ActionForm key={drawer.item.id} action={saveClassSubjects} layout="drawer" submitLabel="Save subjects" onCancel={drawer.close} onSuccess={drawer.close}>
+      <DataTable
+        id="class-subjects"
+        rows={rows}
+        columns={columns}
+        getRowId={(r) => r.id}
+        searchText={(r) => `${r.name} ${r.scholastic.join(" ")}`}
+        exportName="subjects-by-class"
+        rowActions={(r) => [
+          { id: "view", kind: "view", label: "View", onClick: () => drawer.openView(r) },
+          ...(editable ? [{ id: "edit", kind: "edit" as const, label: "Change subjects", onClick: () => drawer.openEdit(r) }] : []),
+        ]}
+        onRowClick={(r) => drawer.openView(r)}
+        rowLabel={(r) => r.name}
+      />
+      {drawer.item && (
+        <Drawer open={drawer.open} onClose={drawer.close} title={`Subjects for ${drawer.item.name}`} description={drawer.readOnly ? undefined : "Tick the subjects this class studies this year."}>
+          <ActionForm key={`${drawer.item.id}-${drawer.mode}`} action={saveClassSubjects} layout="drawer" submitLabel="Save subjects" onCancel={drawer.close} onSuccess={drawer.close} readOnly={drawer.readOnly} onEditRequest={editable ? drawer.toEdit : undefined}>
             {() => (
               <>
                 <input type="hidden" name="academic_year_id" value={yearId} />

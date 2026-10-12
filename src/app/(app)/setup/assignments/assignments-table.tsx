@@ -3,15 +3,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
+import type { RowAction } from "@/components/data-table/data-table";
 import { DataTable, type Column } from "@/components/data-table/data-table";
 import { ConfirmDialog, Drawer } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { IconButton } from "@/components/ui/icon-button";
 import { Badge } from "@/components/ui/card";
 import { ActionForm, FormSection } from "@/components/ui/action-form";
 import { Field, Input, Select } from "@/components/ui/form";
 import { useDrawer } from "@/components/ui/use-drawer";
-import { addAssignment, deleteAssignments } from "@/features/setup/actions";
+import { addAssignment, deleteAssignments, updateAssignment } from "@/features/setup/actions";
 
 export type AssignmentRow = {
   id: string;
@@ -52,6 +52,7 @@ export function AssignmentsTable({
 }) {
   const router = useRouter();
   const drawer = useDrawer<null>();
+  const rowDrawer = useDrawer<AssignmentRow>();
   const [sectionId, setSectionId] = useState("");
 
   async function remove(ids: string[], clear?: () => void) {
@@ -65,9 +66,9 @@ export function AssignmentsTable({
   }
 
   const columns: Column<AssignmentRow>[] = [
-    { id: "class", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.className}</span>, sortValue: (r) => r.classOrder * 100 + r.section.charCodeAt(0), exportValue: (r) => r.className },
+    { id: "class", header: "Class", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.className}</span>, sortValue: (r) => r.classOrder * 100 + r.section.charCodeAt(0), exportValue: (r) => r.className, className: "whitespace-nowrap" },
     { id: "section", header: "Section", cell: (r) => r.section, sortValue: (r) => r.section },
-    { id: "subject", header: "Subject", cell: (r) => r.subject, sortValue: (r) => r.subjectOrder, exportValue: (r) => r.subject },
+    { id: "subject", header: "Subject", cell: (r) => r.subject, sortValue: (r) => r.subjectOrder, exportValue: (r) => r.subject, className: "whitespace-nowrap" },
     {
       id: "teacher",
       header: "Teacher",
@@ -82,27 +83,24 @@ export function AssignmentsTable({
     },
     { id: "periods", header: "Periods / week", align: "right", cell: (r) => r.periods ?? "—", sortValue: (r) => r.periods ?? null, defaultHidden: true },
   ];
-  if (editable) {
-    columns.push({
-      id: "actions",
-      header: "Actions",
-      hideable: false,
-      align: "right",
-      cell: (r) => (
-        <ConfirmDialog
-          title="Remove this assignment?"
-          message={`${r.teacher} will no longer be linked to ${r.subject} in ${r.className} – ${r.section}.`}
-          confirmLabel="Remove"
-          onConfirm={() => remove([r.id])}
-          trigger={(open) => (
-            <IconButton label="Remove assignment" tone="danger" onClick={open}>
-              <Trash2 />
-            </IconButton>
-          )}
-        />
-      ),
-    });
-  }
+
+  const assignmentActions = (r: AssignmentRow): RowAction[] => [
+    { id: "view", kind: "view", label: "View", onClick: () => rowDrawer.openView(r) },
+    ...(editable
+      ? ([
+          { id: "edit", kind: "edit", label: "Edit", onClick: () => rowDrawer.openEdit(r) },
+          {
+            id: "remove",
+            kind: "menu",
+            label: "Remove assignment",
+            icon: Trash2,
+            tone: "danger",
+            confirm: { title: "Remove this assignment?", message: `${r.teacher} will no longer be linked to ${r.subject} in ${r.className} – ${r.section}.`, confirmLabel: "Remove" },
+            onClick: () => remove([r.id]),
+          },
+        ] satisfies RowAction[])
+      : []),
+  ];
 
   const classId = sections.find((s) => s.id === sectionId)?.classId;
   const allowed = new Set(classSubjects.filter((l) => l.class_id === classId).map((l) => l.subject_id));
@@ -112,6 +110,9 @@ export function AssignmentsTable({
     <>
       <DataTable
         id="assignments"
+        rowActions={assignmentActions}
+        onRowClick={(r) => rowDrawer.openView(r)}
+        rowLabel={(r) => `${r.subject}, ${r.className} – ${r.section}`}
         rows={rows}
         columns={columns}
         getRowId={(r) => r.id}
@@ -192,6 +193,51 @@ export function AssignmentsTable({
                 <Field label="Periods / week" name="periods_per_week" errors={fe.periods_per_week}>
                   <Input id="periods_per_week" name="periods_per_week" type="number" min={0} max={48} />
                 </Field>
+              </FormSection>
+            )}
+          </ActionForm>
+        </Drawer>
+      )}
+      {rowDrawer.item && (
+        <Drawer
+          open={rowDrawer.open}
+          onClose={rowDrawer.close}
+          title={`${rowDrawer.item.subject} · ${rowDrawer.item.className} – ${rowDrawer.item.section}`}
+          description={`Academic year ${yearName}`}
+        >
+          <ActionForm
+            key={`${rowDrawer.item.id}-${rowDrawer.mode}`}
+            action={updateAssignment}
+            layout="drawer"
+            submitLabel="Save assignment"
+            onCancel={rowDrawer.close}
+            onSuccess={rowDrawer.close}
+            readOnly={rowDrawer.readOnly}
+            onEditRequest={editable ? rowDrawer.toEdit : undefined}
+          >
+            {(fe) => (
+              <FormSection title="Assignment" columns={1}>
+                <input type="hidden" name="id" value={rowDrawer.item!.id} />
+                <Field label="Section" name="ro-section">
+                  <Input id="ro-section" value={`${rowDrawer.item!.className} – ${rowDrawer.item!.section}`} disabled readOnly />
+                </Field>
+                <Field label="Subject" name="ro-subject">
+                  <Input id="ro-subject" value={rowDrawer.item!.subject} disabled readOnly />
+                </Field>
+                <Field label="Teacher" name="staff_id" errors={fe.staff_id}>
+                  <Select id="staff_id" name="staff_id" defaultValue={rowDrawer.item!.staffId} required>
+                    {teachers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                        {t.designation ? ` (${t.designation})` : ""}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Periods / week" name="periods_per_week" errors={fe.periods_per_week}>
+                  <Input id="periods_per_week" name="periods_per_week" type="number" min={0} max={48} defaultValue={rowDrawer.item!.periods ?? ""} />
+                </Field>
+                {rowDrawer.item!.isClassTeacher && <p className="text-xs text-muted">This teacher is also the class teacher of this section.</p>}
               </FormSection>
             )}
           </ActionForm>
