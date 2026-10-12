@@ -3,7 +3,7 @@
 // removes everything afterwards. Needs DATABASE_URL and the demo admin.
 import pg from "pg";
 
-export const name = "fees: simultaneous payments (8 parallel connections)";
+export const name = "fees: simultaneous payments and misc receipts (parallel connections)";
 
 const YEAR = "TEST-FEECONC-2090";
 
@@ -17,6 +17,7 @@ async function cleanup(db) {
   await db.query(`delete from public.fee_structure where academic_year_id in (select id from public.academic_years where name = $1)`, [YEAR]);
   await db.query(`delete from public.sections where academic_year_id in (select id from public.academic_years where name = $1)`, [YEAR]);
   await db.query(`delete from public.academic_years where name = $1`, [YEAR]);
+  await db.query(`delete from public.fee_heads where name = 'TESTCONC Misc'`);
 }
 
 async function asUser(url, userId, sql, params) {
@@ -81,6 +82,16 @@ export default async function run({ ok, skip }) {
     ok(Number(due2[0].paid_paise) === 6000000, "the due was never overpaid");
     const { rows: rc2 } = await db.query(`select seq from public.fee_receipts where financial_year = '2090-91' order by seq`);
     ok(rc2.length === 9 && rc2[8].seq === 9, "the failed payment left no gap in numbering (next is 9)");
+
+    // 4 due payments + 4 miscellaneous receipts at the same moment: one series
+    const { rows: mh } = await db.query(`insert into public.fee_heads (name, sort_order) values ('TESTCONC Misc', 999) returning id`);
+    const misc = () =>
+      asUser(url, adm[0].user_id, `select public.create_misc_receipt($1, 5000, 'cash', null, null, 'Walk-in', null, '2090-05-01') as id`, [mh[0].id]);
+    const mixed = await Promise.all([...Array.from({ length: 4 }, () => pay(ids[0], 1000)), ...Array.from({ length: 4 }, misc)]);
+    ok(mixed.every((r) => r.ok), "4 payments + 4 misc receipts saved simultaneously", mixed.find((r) => !r.ok)?.error?.message);
+    const { rows: rc3 } = await db.query(`select seq, kind from public.fee_receipts where financial_year = '2090-91' order by seq`);
+    ok(rc3.length === 17 && rc3.every((r, i) => r.seq === i + 1), "misc + due receipts share one gap-free series (1–17)", rc3.map((r) => r.seq).join(","));
+    ok(rc3.filter((r) => r.kind === "misc").length === 4, "4 receipts are marked miscellaneous");
   } finally {
     await cleanup(db).catch(() => {});
     await db.end();
