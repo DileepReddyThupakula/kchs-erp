@@ -18,6 +18,8 @@
     "seed:demo-students": "node --env-file-if-exists=.env.local scripts/demo-students.mjs seed",
     "wipe:demo-students": "node --env-file-if-exists=.env.local scripts/demo-students.mjs wipe",
     "seed:demo-fees": "node --env-file-if-exists=.env.local scripts/demo-fees.mjs seed",
+    "seed:demo-timetable": "node --env-file-if-exists=.env.local scripts/demo-timetable.mjs seed",
+    "wipe:demo-timetable": "node --env-file-if-exists=.env.local scripts/demo-timetable.mjs wipe",
     "wipe:demo-fees": "node --env-file-if-exists=.env.local scripts/demo-fees.mjs wipe",
     "test:ui": "vitest run",
     "test": "npm run test:db && npm run test:ui"

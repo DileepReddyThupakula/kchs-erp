@@ -18,6 +18,10 @@ if (!process.env.DATABASE_URL) {
   process.exit(2);
 }
 
+// TEST_PRE_MIGRATION=<file.sql>: run an unapplied migration INSIDE each test
+// transaction (rolled back with it), so a migration can be proven before it
+// is applied to the database.
+const pre = process.env.TEST_PRE_MIGRATION ? readFileSync(process.env.TEST_PRE_MIGRATION, "utf8") : "";
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
 
@@ -27,6 +31,7 @@ for (const file of files) {
   console.log(`\n# ${file}`);
   try {
     await client.query("begin");
+    if (pre) await client.query(pre);
     await client.query(helpers);
     await client.query(readFileSync(join(dir, file), "utf8"));
     await client.query("select set_config('role', 'postgres', true)");
