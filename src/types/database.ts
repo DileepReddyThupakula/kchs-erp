@@ -615,6 +615,12 @@ export type Database = {
         Args: { p_section: string; p_from: string; p_to: string };
         Returns: { student_id: string; admission_no: string; full_name: string; roll_no: number | null; sessions_marked: number; sessions_attended: number; pct: number | null; full_days: number; half_days: number; absent_days: number }[];
       };
+      section_day_totals: { Args: { p_section: string; p_from: string; p_to: string }; Returns: { student_id: string; admission_no: string; full_name: string; roll_no: number | null; from_date: string; to_date: string; working_days: number; present_days: number; absent_days: number; marked_sessions: number; unmarked_sessions: number; pct: number | null }[] };
+      section_month_day_totals: { Args: { p_section: string; p_month: string }; Returns: { student_id: string; admission_no: string; full_name: string; roll_no: number | null; from_date: string; to_date: string; working_days: number; present_days: number; absent_days: number; marked_sessions: number; unmarked_sessions: number; pct: number | null }[] };
+      student_day_totals: {
+        Args: { p_student: string; p_from: string; p_to: string };
+        Returns: { student_id: string; from_date: string; to_date: string; working_days: number; present_days: number; absent_days: number; marked_sessions: number; unmarked_sessions: number; pct: number | null }[];
+      };
       leave_balance: {
         Args: { p_staff: string; p_year: string };
         Returns: { leave_type_id: string; leave_type: string; allowance: number | null; used: number; pending: number; remaining: number | null }[];

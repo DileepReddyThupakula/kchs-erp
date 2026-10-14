@@ -25,9 +25,9 @@ function Item({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default async function StudentProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; saved?: string; month?: string }> }) {
+export default async function StudentProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; saved?: string; month?: string; tcFrom?: string; tcTo?: string }> }) {
   const { id } = await params;
-  const { tab = "overview", saved, month } = await searchParams;
+  const { tab = "overview", saved, month, tcFrom, tcTo } = await searchParams;
   const me = await requireStaff();
   // RLS decides visibility (scope rule). Not visible -> not allowed, no data.
   const p = await getStudentProfile(id);
@@ -42,6 +42,17 @@ export default async function StudentProfilePage({ params, searchParams }: { par
   const s = p.student;
   const missing = manage ? missingGovFields(definitions, p.details ?? {}, new Set(Object.keys(p.masked))) : [];
   const missingDocs = manage ? docTypes.filter((d) => d.required && !p.documents.some((x) => x.doc_type === d.code)).map((d) => d.label) : [];
+
+  // transfer-certificate figures: Admin, the attendance duty, and the class teacher of the student's section
+  let canTc = me.role === "admin" || me.duties.includes("all_class_attendance");
+  if (!canTc && tab === "attendance") {
+    const { data: en } = await supabase.from("student_enrollments").select("section_id").eq("student_id", s.id);
+    const ids = (en ?? []).map((e) => e.section_id);
+    if (ids.length) {
+      const { data: secs } = await supabase.from("sections").select("id").in("id", ids).eq("class_teacher_id", me.staffId);
+      canTc = (secs ?? []).length > 0;
+    }
+  }
 
   const tabs = [
     { id: "overview", label: "Overview" },
@@ -235,7 +246,9 @@ export default async function StudentProfilePage({ params, searchParams }: { par
 
       {tab === "fees" && feeAccess && <StudentFeesPanel studentId={s.id} />}
 
-      {tab === "attendance" && <StudentAttendancePanel studentId={s.id} month={month} />}
+      {tab === "attendance" && (
+        <StudentAttendancePanel studentId={s.id} month={month} canTc={canTc} tcFrom={tcFrom} tcTo={tcTo} admissionDate={s.admission_date} />
+      )}
 
       {tab === "marks" && (
         <EmptyState title="Coming soon">

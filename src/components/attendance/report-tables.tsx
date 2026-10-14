@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form";
 import { saveLowAttendanceThreshold } from "@/features/attendance/actions";
-import { DAY_MARK, KIND_LABEL, SESSION_LABEL, dayOfWeek, type SessionName } from "@/features/attendance/shared";
+import { DAY_MARK, KIND_LABEL, SESSION_LABEL, dayOfWeek, fmtDays, type SessionName } from "@/features/attendance/shared";
 
 // ------------------------------------------------------------------ daily summary
 export type DailyRowView = {
@@ -71,9 +71,10 @@ export type RegisterRow = {
   admissionNo: string;
   days: Record<number, string | undefined>; // day-of-month -> day_status
   pct: number | null;
-  full: number;
-  half: number;
+  working: number;
+  present: number;
   absent: number;
+  unmarked: number;
 };
 
 export function RegisterTable({ rows, month, days, nonSchool, exportName }: { rows: RegisterRow[]; month: string; days: number; nonSchool: number[]; exportName: string }) {
@@ -94,13 +95,18 @@ export function RegisterTable({ rows, month, days, nonSchool, exportName }: { ro
     { id: "roll", header: "Roll", align: "right", cell: (r) => r.roll ?? "", sortValue: (r) => r.roll ?? 9999, exportValue: (r) => r.roll ?? "" },
     { id: "name", header: "Student", hideable: false, pinned: "left", cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name, className: "whitespace-nowrap", exportValue: (r) => r.name },
     ...dayCols,
-    { id: "full", header: "Full days", align: "right", cell: (r) => r.full, sortValue: (r) => r.full, exportValue: (r) => r.full },
-    { id: "half", header: "Half days", align: "right", cell: (r) => r.half, sortValue: (r) => r.half, exportValue: (r) => r.half },
-    { id: "absent", header: "Absent days", align: "right", cell: (r) => r.absent, sortValue: (r) => r.absent, exportValue: (r) => r.absent },
-    { id: "pct", header: "%", align: "right", cell: (r) => (r.pct == null ? "—" : <b>{r.pct.toFixed(1)}%</b>), sortValue: (r) => r.pct ?? -1, exportValue: (r) => (r.pct == null ? "" : r.pct) },
+    { id: "working", header: "Working days", align: "right", hideable: false, cell: (r) => fmtDays(r.working), sortValue: (r) => r.working, exportValue: (r) => r.working },
+    { id: "present", header: "Present days", align: "right", hideable: false, cell: (r) => <b>{fmtDays(r.present)}</b>, sortValue: (r) => r.present, exportValue: (r) => r.present },
+    { id: "absent", header: "Absent days", align: "right", hideable: false, cell: (r) => fmtDays(r.absent), sortValue: (r) => r.absent, exportValue: (r) => r.absent },
+    { id: "pct", header: "%", align: "right", hideable: false, cell: (r) => (r.pct == null ? "—" : <b>{r.pct.toFixed(1)}%</b>), sortValue: (r) => r.pct ?? -1, exportValue: (r) => (r.pct == null ? "" : r.pct) },
   ];
   return (
     <div className="space-y-2">
+      {rows.some((r) => r.unmarked > 0) && (
+        <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Some sessions in this month are not marked ({rows.reduce((a, r) => a + r.unmarked, 0)} student sessions), so these figures are incomplete.
+        </p>
+      )}
       <p className="text-xs text-muted">
         P present both sessions · A absent both · ½M morning only · ½A afternoon only · ? one session marked · – not marked · · not a school day. Percentage counts each session as half a day; Late counts as present.
       </p>

@@ -44,3 +44,6 @@ export function shiftMonth(month: string, delta: number) {
 }
 export const monthLabel = (month: string) =>
   new Date(month + "-01T00:00:00Z").toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
+
+/** Day counts show decimals plainly: 19, 19.5 (never 19.0). */
+export const fmtDays = (n: number | null | undefined) => (n == null ? "—" : String(Math.round(n * 10) / 10));

@@ -5,11 +5,26 @@ import { resolveYear } from "@/lib/settings";
 import { Card } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button-classes";
 import { getDailyRows } from "@/features/attendance/queries";
-import { DAY_MARK, DAY_TEXT, monthLabel, monthRange, shiftMonth, type DayStatus } from "@/features/attendance/shared";
+import { DAY_MARK, DAY_TEXT, fmtDays, monthLabel, monthRange, shiftMonth, type DayStatus } from "@/features/attendance/shared";
+import { CopyTotals } from "@/components/attendance/tc-box";
 import { todayIst } from "@/features/fees/shared";
 
 /** Month calendar + percentages. Only attendance the signed-in person may see is counted (scope rule, enforced by RLS). */
-export async function StudentAttendancePanel({ studentId, month: monthParam }: { studentId: string; month?: string }) {
+export async function StudentAttendancePanel({
+  studentId,
+  month: monthParam,
+  canTc = false,
+  tcFrom,
+  tcTo,
+  admissionDate,
+}: {
+  studentId: string;
+  month?: string;
+  canTc?: boolean;
+  tcFrom?: string;
+  tcTo?: string;
+  admissionDate?: string;
+}) {
   const supabase = await createClient();
   const today = todayIst();
   const month = /^\d{4}-\d{2}$/.test(monthParam ?? "") ? monthParam! : today.slice(0, 7);
@@ -29,7 +44,52 @@ export async function StudentAttendancePanel({ studentId, month: monthParam }: {
   const ys = y?.[0];
   const href = (mm: string) => `/students/${studentId}?tab=attendance&month=${mm}`;
 
+  // "For transfer certificate": working days and days present over a chosen range
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  const defFrom = year ? (admissionDate && admissionDate > year.start_date ? admissionDate : year.start_date) : (admissionDate ?? today);
+  const fromD = iso.test(tcFrom ?? "") ? tcFrom! : defFrom;
+  const toD = iso.test(tcTo ?? "") ? tcTo! : today;
+  const tc = canTc ? ((await supabase.rpc("student_day_totals", { p_student: studentId, p_from: fromD, p_to: toD })).data ?? [])[0] : undefined;
+
   return (
+    <div className="space-y-4">
+    {canTc && (
+      <Card>
+        <h3 className="mb-2 font-semibold text-navy-900">For transfer certificate</h3>
+        <form method="get" className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="tab" value="attendance" />
+          <input type="hidden" name="month" value={month} />
+          <label className="text-xs text-muted">
+            From
+            <input type="date" name="tcFrom" defaultValue={fromD} className="mt-0.5 block h-10 rounded-lg border border-border bg-surface px-2 text-sm text-foreground" />
+          </label>
+          <label className="text-xs text-muted">
+            To
+            <input type="date" name="tcTo" defaultValue={toD} className="mt-0.5 block h-10 rounded-lg border border-border bg-surface px-2 text-sm text-foreground" />
+          </label>
+          <button className="h-10 rounded-lg bg-navy-700 px-4 text-sm font-medium text-white hover:bg-navy-800">Show</button>
+        </form>
+        {!tc ? (
+          <p className="mt-3 text-sm text-muted">No working days in this range for this student.</p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            <p className="text-lg">
+              <b>Working days:</b> <span className="tabular-nums">{fmtDays(tc.working_days)}</span> · <b>Days present:</b> <span className="tabular-nums">{fmtDays(tc.present_days)}</span>
+              {tc.pct != null && <span className="ml-2 text-sm text-muted">({tc.pct.toFixed(1)}%)</span>}
+            </p>
+            <p className="text-xs text-muted">
+              Counted from {tc.from_date} to {tc.to_date} (from the admission date, up to the leaving date, never beyond today). Days absent: {fmtDays(tc.absent_days)}.
+            </p>
+            {tc.unmarked_sessions > 0 && (
+              <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Warning: {tc.unmarked_sessions} session(s) in this range are not marked, so these figures are incomplete. Mark or correct them before using them on a certificate.
+              </p>
+            )}
+            <CopyTotals text={`Working days: ${fmtDays(tc.working_days)}, Days present: ${fmtDays(tc.present_days)}`} />
+          </div>
+        )}
+      </Card>
+    )}
     <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
       <Card>
         <div className="mb-3 flex items-center justify-between">
@@ -79,6 +139,7 @@ export async function StudentAttendancePanel({ studentId, month: monthParam }: {
           <Figures s={ys} />
         </Card>
       </div>
+    </div>
     </div>
   );
 }
