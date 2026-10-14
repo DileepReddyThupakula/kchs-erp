@@ -103,12 +103,18 @@ select pg_temp.counts($$select count(*) from public.my_attendance_sessions() whe
 select pg_temp.throws($$select public.mark_attendance('3d000000-0000-4000-f400-000000000001', pg_temp.today(), 'morning', pg_temp.entries('present','present','present', null)::jsonb)$$, 'a missing/invalid status is rejected', '23514');
 select pg_temp.throws($$select public.mark_attendance('3d000000-0000-4000-f400-000000000001', pg_temp.today(), 'morning', (jsonb_build_array(jsonb_build_object('student_id', '55000000-0000-4000-f400-000000000001', 'status', 'present')))::jsonb)$$, 'first marking must cover every student', '23514');
 select pg_temp.throws($$select public.mark_attendance('3d000000-0000-4000-f400-000000000001', pg_temp.today(), 'morning', pg_temp.entriesB()::jsonb)$$, 'a student of another section cannot be marked here', '23514');
-select pg_temp.lives($$select public.mark_attendance('3d000000-0000-4000-f400-000000000001', pg_temp.today(), 'morning', pg_temp.entries('present','absent','late','leave')::jsonb)$$, 'substitute: marks the morning session');
+select pg_temp.lives($$select public.mark_attendance('3d000000-0000-4000-f400-000000000001', pg_temp.today(), 'morning', pg_temp.entries('present','absent','late','absent')::jsonb)$$, 'substitute: marks the morning session');
 select pg_temp.counts($$select count(*) from public.attendance_sessions where kind = 'substitute' and marked_by = '18000000-0000-4000-f400-000000000006' and assigned_to = '18000000-0000-4000-f400-000000000006'$$, 1, 'session records marker, assignee and kind = substitute');
 select pg_temp.ok((select marked and marked_kind = 'substitute' from public.my_attendance_sessions() where section_id = '3d000000-0000-4000-f400-000000000001' and session = 'morning'), 'the screen function shows it as marked');
 
+-- "leave" is no longer a student status
+select pg_temp.throws($$select public.mark_attendance('3d000000-0000-4000-f400-000000000001', pg_temp.today(), 'morning', pg_temp.entries('present','present','present','leave')::jsonb)$$, 'student status "leave" is rejected', '23514');
+select pg_temp.logout();
+select pg_temp.throws($$update public.student_attendance set status = 'leave'$$, 'the database constraint also refuses "leave"', '23514');
+select pg_temp.login_as('00000000-0000-4000-f400-000000000006');
+
 -- the same marker may save again today (update, no duplicates)
-select pg_temp.lives($$select public.mark_attendance('3d000000-0000-4000-f400-000000000001', pg_temp.today(), 'morning', pg_temp.entries('present','absent','present','leave')::jsonb)$$, 'marker: re-saves the same session today');
+select pg_temp.lives($$select public.mark_attendance('3d000000-0000-4000-f400-000000000001', pg_temp.today(), 'morning', pg_temp.entries('present','absent','present','absent')::jsonb)$$, 'marker: re-saves the same session today');
 select pg_temp.login_as('00000000-0000-4000-f400-000000000001');
 select pg_temp.counts($$select count(*) from public.student_attendance where att_date = pg_temp.today() and session = 'morning' and student_id = '55000000-0000-4000-f400-000000000003'$$, 1, 'no duplicate row per student, date and session');
 select pg_temp.counts($$select count(*) from public.attendance_sessions where section_id = '3d000000-0000-4000-f400-000000000001' and att_date = pg_temp.today() and session = 'morning'$$, 1, 'one session row per section, date and session');
@@ -163,14 +169,14 @@ update public.school_settings set working_days = '{1,2,3,4,5,6,7}' where id = 1;
 select pg_temp.login_as('00000000-0000-4000-f400-000000000001');
 select pg_temp.ok((select day_status = 'present' from public.attendance_daily where student_id = '55000000-0000-4000-f400-000000000001' and att_date = pg_temp.today()), 'daily: present both sessions');
 select pg_temp.ok((select day_status = 'present' from public.attendance_daily where student_id = '55000000-0000-4000-f400-000000000002' and att_date = pg_temp.today()), 'daily: late + present counts as present both sessions');
-select pg_temp.ok((select day_status = 'absent' from public.attendance_daily where student_id = '55000000-0000-4000-f400-000000000004' and att_date = pg_temp.today()), 'daily: leave + absent = absent');
+select pg_temp.ok((select day_status = 'absent' from public.attendance_daily where student_id = '55000000-0000-4000-f400-000000000004' and att_date = pg_temp.today()), 'daily: absent + absent = absent');
 select pg_temp.ok((select day_status = 'morning_only' from public.attendance_daily where student_id = '55000000-0000-4000-f400-000000000003' and att_date = pg_temp.today() - 1), 'daily: morning only (half day)');
 select pg_temp.ok((select pct = 100.0 and full_days = 2 and half_days = 0 from public.attendance_summary('55000000-0000-4000-f400-000000000001', pg_temp.today() - 1, pg_temp.today())), 'percentage: two full days = 100%');
 select pg_temp.ok((select sessions_marked = 4 and sessions_attended = 3 and pct = 75.0 and full_days = 1 and half_days = 1 from public.attendance_summary('55000000-0000-4000-f400-000000000003', pg_temp.today() - 1, pg_temp.today())), 'percentage: a half day counts as half (3 of 4 sessions = 75%)');
 select pg_temp.ok((select pct = 50.0 and absent_days = 1 and full_days = 1 from public.attendance_summary('55000000-0000-4000-f400-000000000002', pg_temp.today() - 1, pg_temp.today())), 'percentage: 2 of 4 sessions = 50%, one absent day');
 select pg_temp.ok((select pct is null and sessions_marked = 0 from public.attendance_summary('55000000-0000-4000-f400-000000000001', pg_temp.today() - 30, pg_temp.today() - 20)), 'percentage: no marked sessions = no percentage');
 select pg_temp.ok((select count(*) = 4 and max(pct) = 100.0 from public.section_attendance('3d000000-0000-4000-f400-000000000001', pg_temp.today() - 1, pg_temp.today())), 'section report: all four students listed');
-select pg_temp.ok((select present = 3 and absent = 1 and on_leave = 0 and total = 4 and marked from public.daily_attendance_summary(pg_temp.today()) where section_id = '3d000000-0000-4000-f400-000000000001' and session = 'afternoon'), 'daily summary counts for a session');
+select pg_temp.ok((select present = 3 and absent = 1 and late = 0 and total = 4 and marked from public.daily_attendance_summary(pg_temp.today()) where section_id = '3d000000-0000-4000-f400-000000000001' and session = 'afternoon'), 'daily summary counts for a session');
 
 -- =====================================================================
 -- Scope: who sees which attendance

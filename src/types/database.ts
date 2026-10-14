@@ -396,7 +396,7 @@ export type StudentAttendanceRow = Stamps & {
   student_id: string;
   att_date: string;
   session: "morning" | "afternoon";
-  status: "present" | "absent" | "late" | "leave";
+  status: "present" | "absent" | "late";
   note: string | null;
   marked_by: string | null;
   is_demo: boolean;
@@ -605,7 +605,7 @@ export type Database = {
       };
       daily_attendance_summary: {
         Args: { p_date: string };
-        Returns: { section_id: string; section_label: string; session: string; marked: boolean; marked_by_name: string | null; kind: string | null; present: number; late: number; absent: number; on_leave: number; total: number }[];
+        Returns: { section_id: string; section_label: string; session: string; marked: boolean; marked_by_name: string | null; kind: string | null; present: number; late: number; absent: number; total: number }[];
       };
       attendance_summary: {
         Args: { p_student: string; p_from: string; p_to: string };

@@ -82,7 +82,7 @@ export async function seedDemoAttendance() {
           sessionsN++;
           for (const st of students) {
             const x = rand();
-            const status = x < 0.9 ? "present" : x < 0.96 ? "absent" : x < 0.99 ? "late" : "leave";
+            const status = x < 0.91 ? "present" : x < 0.97 ? "absent" : "late";
             await db.query(
               `insert into public.student_attendance (session_id, student_id, status, marked_by, is_demo) values ($1, $2, $3, $4, true)`,
               [s[0].id, st, status, markedBy],

@@ -1,29 +1,26 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CheckCircle2, Check, Lock, UserCheck } from "lucide-react";
+import { ArrowLeft, Lock, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { buttonClasses } from "@/components/ui/button-classes";
-import { Badge, Card } from "@/components/ui/card";
 import { cn, formatDate } from "@/lib/utils";
 import { saveAttendance } from "@/features/attendance/actions";
 import { KIND_LABEL, SESSION_LABEL, STATUS_LABEL, type SessionName, type Status } from "@/features/attendance/shared";
 
 export type SheetStudent = { studentId: string; admissionNo: string; name: string; roll: number | null };
 
-const STATUS_STYLE: Record<Status, string> = {
-  present: "data-[on=true]:border-peacock-600 data-[on=true]:bg-peacock-600 data-[on=true]:text-white",
-  absent: "data-[on=true]:border-red-700 data-[on=true]:bg-red-700 data-[on=true]:text-white",
-  late: "data-[on=true]:border-amber-600 data-[on=true]:bg-amber-500 data-[on=true]:text-navy-950",
-  leave: "data-[on=true]:border-navy-700 data-[on=true]:bg-navy-700 data-[on=true]:text-white",
-};
-const ORDER: Status[] = ["present", "absent", "late", "leave"];
+const KEYS: { status: Status; letter: string; on: string }[] = [
+  { status: "present", letter: "P", on: "border-peacock-600 bg-peacock-600 text-white" },
+  { status: "absent", letter: "A", on: "border-red-700 bg-red-700 text-white" },
+  { status: "late", letter: "L", on: "border-amber-600 bg-amber-500 text-navy-950" },
+];
 
 /**
- * Mark one session. Mobile first: big tap targets, the summary and Save stay
- * at the bottom. Locked / not-yours sessions open read-only with the reason.
+ * Compact register for one session. A student row is ~40px: roll, name and
+ * a P / A / L segmented control. Sessions open with everyone Present (first
+ * time) and Save stays in the sticky bar. Read-only when locked / not yours.
  */
 export function MarkSheet({
   sectionId,
@@ -47,15 +44,18 @@ export function MarkSheet({
   backHref: string;
 }) {
   const router = useRouter();
-  const [marks, setMarks] = useState<Record<string, Status | undefined>>(() =>
-    Object.fromEntries(students.map((s) => [s.studentId, (saved?.rows[s.studentId]?.status as Status | undefined) ?? undefined])),
-  );
+  const initial = (id: string): Status | undefined => (saved?.rows[id]?.status as Status | undefined) ?? (editable && !saved ? "present" : undefined);
+  const [marks, setMarks] = useState<Record<string, Status | undefined>>(() => Object.fromEntries(students.map((s) => [s.studentId, initial(s.studentId)])));
+  const [baseline, setBaseline] = useState<Record<string, Status | undefined>>(() => (saved ? Object.fromEntries(students.map((s) => [s.studentId, initial(s.studentId)])) : {}));
+  const [everSaved, setEverSaved] = useState(!!saved);
+  const [savedAt, setSavedAt] = useState<string | null>(saved ? timeOf(saved.markedAt) : null);
+  const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<{ present: number; absent: number; late: number; leave: number; at: string } | null>(null);
   const [error, setError] = useState("");
+  const listRef = useRef<HTMLUListElement>(null);
 
   const counts = useMemo(() => {
-    const c = { present: 0, absent: 0, late: 0, leave: 0, unmarked: 0 };
+    const c = { present: 0, absent: 0, late: 0, unmarked: 0 };
     for (const s of students) {
       const m = marks[s.studentId];
       if (m) c[m]++;
@@ -63,7 +63,12 @@ export function MarkSheet({
     }
     return c;
   }, [marks, students]);
-  const changed = students.some((s) => marks[s.studentId] !== (saved?.rows[s.studentId]?.status as Status | undefined));
+  const dirty = !everSaved || students.some((s) => marks[s.studentId] !== baseline[s.studentId]);
+  const shown = query.trim()
+    ? students.filter((s) => `${s.name} ${s.admissionNo} ${s.roll ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()))
+    : students;
+
+  const set = (id: string, st: Status) => setMarks((m) => ({ ...m, [id]: st }));
 
   async function save() {
     setError("");
@@ -76,100 +81,105 @@ export function MarkSheet({
       toast.error(res.error);
       return;
     }
-    toast.success("Attendance saved");
-    setDone({ ...res.counts!, at: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }) });
+    const at = timeOf(new Date().toISOString());
+    setBaseline({ ...marks });
+    setEverSaved(true);
+    setSavedAt(at);
+    toast.success(`Saved ${sectionLabel}, ${SESSION_LABEL[session].toLowerCase()}`, {
+      description: `${res.counts!.present} present · ${res.counts!.absent} absent · ${res.counts!.late} late · ${at}`,
+    });
     router.refresh();
   }
 
-  if (done) {
-    return (
-      <Card className="mx-auto max-w-xl text-center" role="status">
-        <CheckCircle2 className="mx-auto size-12 text-peacock-600" aria-hidden />
-        <h2 className="mt-2 text-xl font-semibold text-navy-900">Attendance saved</h2>
-        <p className="text-sm text-muted">
-          {sectionLabel} · {SESSION_LABEL[session]} · {formatDate(date)} · {done.at}
-        </p>
-        <p className="mt-3 text-base">
-          <b>{done.present}</b> present · <b>{done.absent}</b> absent · <b>{done.late}</b> late · <b>{done.leave}</b> on leave
-        </p>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <Link href={backHref} className={buttonClasses("primary", "lg")}>
-            Back to sessions
-          </Link>
-          <Button variant="secondary" size="lg" onClick={() => setDone(null)}>
-            Review or change
-          </Button>
-        </div>
-      </Card>
-    );
+  function onRowKey(e: React.KeyboardEvent<HTMLLIElement>, id: string) {
+    if ((e.target as HTMLElement).tagName === "INPUT") return;
+    const rows = [...(listRef.current?.querySelectorAll<HTMLElement>("[data-row]") ?? [])];
+    const i = rows.indexOf(e.currentTarget);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      rows[Math.min(rows.length - 1, i + 1)]?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      rows[Math.max(0, i - 1)]?.focus();
+    } else if (editable && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const k = KEYS.find((x) => x.letter.toLowerCase() === e.key.toLowerCase());
+      if (k) {
+        e.preventDefault();
+        set(id, k.status);
+      }
+    }
   }
 
   return (
-    <div className="mx-auto max-w-3xl pb-28">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Badge tone="info">{SESSION_LABEL[session]} session</Badge>
-        <span className="text-sm text-muted">{formatDate(date)}</span>
-        {saved && (
-          <span className="text-xs text-muted">
-            Marked by {saved.markedByName ?? "someone"} ·{" "}
-            {new Date(saved.markedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" })} ·{" "}
-            {KIND_LABEL[saved.kind] ?? saved.kind}
-          </span>
-        )}
+    <div>
+      {/* sticky bar: where we are, live counts, Save */}
+      <div className="sticky top-16 z-20 -mx-4 border-b border-border bg-surface/95 px-4 py-2 backdrop-blur lg:top-[3.1rem] lg:-mx-8 lg:px-8">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Link href={backHref} aria-label="Back to sessions" className="grid size-9 place-items-center rounded-lg text-navy-700 hover:bg-navy-50">
+            <ArrowLeft className="size-5" aria-hidden />
+          </Link>
+          <div className="min-w-[10rem] flex-1">
+            <p className="font-semibold text-navy-900">
+              {sectionLabel} · {SESSION_LABEL[session]}
+            </p>
+            <p className="text-xs text-muted">{formatDate(date)}</p>
+          </div>
+          <p className="flex items-center gap-3 text-sm tabular-nums" aria-live="polite">
+            <span>
+              <b className="text-peacock-700">{counts.present}</b> Present
+            </span>
+            <span>
+              <b className="text-red-700">{counts.absent}</b> Absent
+            </span>
+            <span>
+              <b className="text-amber-700">{counts.late}</b> Late
+            </span>
+          </p>
+          {editable ? (
+            <div className="flex items-center gap-2">
+              <span className={cn("text-xs font-medium", dirty ? "text-amber-800" : "text-peacock-700")} role="status">
+                {dirty ? (everSaved ? "Unsaved changes" : "Not saved yet") : `Saved ${savedAt ?? ""}`}
+              </span>
+              <Button loading={busy} disabled={busy || !dirty || counts.unmarked > 0} onClick={save}>
+                Save
+              </Button>
+            </div>
+          ) : (
+            <span className="text-xs text-muted">Read only</span>
+          )}
+        </div>
       </div>
 
       {lockNote && (
-        <p role="note" className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <p role="note" className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <Lock className="mt-0.5 size-4 shrink-0" aria-hidden /> {lockNote}
         </p>
       )}
 
-      {editable && (
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="lg" onClick={() => setMarks(Object.fromEntries(students.map((s) => [s.studentId, "present" as Status])))}>
-            <UserCheck className="size-5" /> Mark all present
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label className="relative">
+          <span className="sr-only">Search students</span>
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Find a student"
+            className="h-9 w-56 rounded-lg border border-border bg-surface pl-8 pr-2 text-sm outline-none focus:border-navy-400"
+          />
+        </label>
+        {editable && (
+          <Button variant="secondary" size="sm" onClick={() => setMarks(Object.fromEntries(students.map((s) => [s.studentId, "present" as Status])))}>
+            Mark all present
           </Button>
-          <span className="text-sm text-muted">Then tap the students who are absent, late or on leave.</span>
-        </div>
-      )}
-
-      <ul className="divide-y divide-border overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-soft)]">
-        {students.map((s) => {
-          const m = marks[s.studentId];
-          return (
-            <li key={s.studentId} className="px-3 py-2.5">
-              <div className="mb-1.5 flex items-baseline gap-2">
-                <span className="w-7 shrink-0 text-right text-sm tabular-nums text-muted">{s.roll ?? ""}</span>
-                <span className="min-w-0 flex-1 truncate font-medium text-navy-900">{s.name}</span>
-                {!editable && m && <Badge tone={m === "present" ? "success" : m === "absent" ? "danger" : "warning"}>{STATUS_LABEL[m]}</Badge>}
-                {!editable && !m && <span className="text-xs text-muted">Not marked</span>}
-              </div>
-              {editable && (
-                <div role="radiogroup" aria-label={`Attendance for ${s.name}`} className="grid grid-cols-4 gap-1.5">
-                  {ORDER.map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      role="radio"
-                      aria-checked={m === st}
-                      data-on={m === st}
-                      onClick={() => setMarks((x) => ({ ...x, [s.studentId]: st }))}
-                      className={cn(
-                        "inline-flex min-h-11 items-center justify-center gap-1 rounded-lg border border-border bg-white px-1 text-sm font-medium text-navy-800 active:scale-[0.98]",
-                        STATUS_STYLE[st],
-                      )}
-                    >
-                      {m === st && <Check className="size-4" aria-hidden />}
-                      {STATUS_LABEL[st]}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </li>
-          );
-        })}
-        {students.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">No students are enrolled in this section on this date.</li>}
-      </ul>
+        )}
+        {saved && (
+          <span className="text-xs text-muted">
+            Last saved by {saved.markedByName ?? "someone"} · {KIND_LABEL[saved.kind] ?? saved.kind}
+          </span>
+        )}
+        {editable && <span className="hidden text-xs text-muted lg:inline">Keys: ↑ ↓ move · P present · A absent · L late</span>}
+      </div>
 
       {error && (
         <p role="alert" className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -177,23 +187,61 @@ export function MarkSheet({
         </p>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur lg:left-64">
-        <div className="mx-auto flex max-w-3xl items-center gap-3">
-          <p className="min-w-0 flex-1 text-sm" aria-live="polite">
-            <b className="text-peacock-700">{counts.present}</b> present · <b className="text-red-700">{counts.absent}</b> absent · <b>{counts.late}</b> late · <b>{counts.leave}</b> leave
-            {counts.unmarked > 0 && <span className="text-amber-800"> · {counts.unmarked} not marked</span>}
-          </p>
-          {editable ? (
-            <Button size="lg" loading={busy} disabled={busy || counts.unmarked > 0 || (!changed && !!saved)} onClick={save}>
-              {saved ? "Save changes" : "Save attendance"}
-            </Button>
-          ) : (
-            <Link href={backHref} className={buttonClasses("secondary", "lg")}>
-              Back
-            </Link>
-          )}
-        </div>
-      </div>
+      {/* two columns on wide screens, filled top-to-bottom so roll numbers read down each column */}
+      <ul
+        ref={listRef}
+        style={{ ["--rows" as string]: Math.max(1, Math.ceil(shown.length / 2)) }}
+        className="mt-3 grid grid-cols-1 gap-x-4 lg:grid-flow-col lg:grid-cols-2 lg:grid-rows-[repeat(var(--rows),minmax(0,auto))]"
+        aria-label="Students"
+      >
+        {shown.map((s) => {
+          const m = marks[s.studentId];
+          const changed = editable && everSaved && m !== baseline[s.studentId];
+          return (
+            <li
+              key={s.studentId}
+              data-row
+              tabIndex={0}
+              onKeyDown={(e) => onRowKey(e, s.studentId)}
+              className={cn(
+                "flex min-h-11 items-center gap-2 border-b border-border px-2 outline-none focus-visible:bg-gold-50 focus-visible:ring-2 focus-visible:ring-gold-500",
+                changed && "bg-amber-50/70",
+              )}
+            >
+              <span className="w-7 shrink-0 text-right text-sm tabular-nums text-muted">{s.roll ?? ""}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-navy-900">{s.name}</span>
+              {editable ? (
+                <span role="radiogroup" aria-label={`Attendance for ${s.name}`} className="inline-flex shrink-0 gap-1">
+                  {KEYS.map((k) => (
+                    <button
+                      key={k.status}
+                      type="button"
+                      role="radio"
+                      tabIndex={-1}
+                      aria-checked={m === k.status}
+                      aria-label={STATUS_LABEL[k.status]}
+                      onClick={() => set(s.studentId, k.status)}
+                      className={cn(
+                        "grid size-10 place-items-center rounded-lg border text-sm font-semibold lg:size-8 lg:rounded-md",
+                        m === k.status ? k.on : "border-border bg-white text-navy-700 hover:bg-navy-50",
+                      )}
+                    >
+                      {k.letter}
+                    </button>
+                  ))}
+                </span>
+              ) : (
+                <span className="shrink-0 text-sm font-medium">{m ? STATUS_LABEL[m] : <span className="text-muted">Not marked</span>}</span>
+              )}
+            </li>
+          );
+        })}
+        {shown.length === 0 && <li className="col-span-full px-3 py-6 text-center text-sm text-muted">{students.length ? "No student matches your search." : "No students are enrolled in this section on this date."}</li>}
+      </ul>
     </div>
   );
+}
+
+function timeOf(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
 }

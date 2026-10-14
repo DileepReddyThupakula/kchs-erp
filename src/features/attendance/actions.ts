@@ -7,7 +7,7 @@ import { requireCapability, requireStaff } from "@/lib/auth/session";
 const uuid = z.string().uuid();
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export type AtResult = { ok: true; message?: string; counts?: { present: number; absent: number; late: number; leave: number } } | { ok: false; error: string };
+export type AtResult = { ok: true; message?: string; counts?: { present: number; absent: number; late: number } } | { ok: false; error: string };
 const fail = (error: string): AtResult => ({ ok: false, error });
 
 function msg(err: { code?: string; message: string }): string {
@@ -26,7 +26,7 @@ function refresh() {
   revalidatePath("/dashboard");
 }
 
-const entrySchema = z.object({ studentId: uuid, status: z.enum(["present", "absent", "late", "leave"]), note: z.string().max(200).optional() });
+const entrySchema = z.object({ studentId: uuid, status: z.enum(["present", "absent", "late"]), note: z.string().max(200).optional() });
 
 export async function saveAttendance(input: { sectionId: string; date: string; session: "morning" | "afternoon"; entries: z.infer<typeof entrySchema>[] }): Promise<AtResult> {
   await requireStaff();
@@ -42,7 +42,7 @@ export async function saveAttendance(input: { sectionId: string; date: string; s
   });
   if (error) return fail(msg(error));
   refresh();
-  const c = { present: 0, absent: 0, late: 0, leave: 0 };
+  const c = { present: 0, absent: 0, late: 0 };
   for (const r of e.data) c[r.status]++;
   return { ok: true, message: "Attendance saved.", counts: c };
 }

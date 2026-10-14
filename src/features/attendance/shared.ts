@@ -1,14 +1,14 @@
 /** Pure helpers for the Attendance module (server + client). */
-export type Status = "present" | "absent" | "late" | "leave";
+export type Status = "present" | "absent" | "late";
 export type SessionName = "morning" | "afternoon";
 
-export const STATUS_LABEL: Record<Status, string> = { present: "Present", absent: "Absent", late: "Late", leave: "Leave" };
+export const STATUS_LABEL: Record<Status, string> = { present: "Present", absent: "Absent", late: "Late" };
 /** One-letter mark used in registers (printed in black and white too). */
-export const STATUS_MARK: Record<Status, string> = { present: "P", absent: "A", late: "L", leave: "LV" };
+export const STATUS_MARK: Record<Status, string> = { present: "P", absent: "A", late: "L" };
 export const SESSION_LABEL: Record<SessionName, string> = { morning: "Morning", afternoon: "Afternoon" };
 export const KIND_LABEL: Record<string, string> = { regular: "Regular", substitute: "Substitute", correction: "Correction" };
 
-/** Present and Late count as attended (DECISIONS AT3). */
+/** Present and Late count as attended; Absent does not (DECISIONS AT3). */
 export const attended = (s: string | null | undefined) => s === "present" || s === "late";
 
 export type DayStatus = "present" | "absent" | "morning_only" | "afternoon_only" | "one_session_present" | "one_session_absent";

@@ -3,7 +3,7 @@ import { CalendarCheck, CheckCircle2, ChevronRight, Clock } from "lucide-react";
 import { requirePage } from "@/features/students/page-guard";
 import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui/card";
+import { Badge, Breadcrumbs, Card, EmptyState, PageHeader } from "@/components/ui/card";
 import { AttendanceTabs } from "@/components/attendance/nav";
 import { MarkSheet } from "@/components/attendance/mark-sheet";
 import { DatePicker, SectionPicker } from "@/components/attendance/pickers";
@@ -70,7 +70,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
     }
     return (
       <>
-        <PageHeader breadcrumbs={[{ label: "Academics" }, { label: "Attendance", href: "/attendance" }, { label: section.label }]} icon={<CalendarCheck />} title={section.label} description={`${SESSION_LABEL[session]} session · ${formatDate(date)}`} />
+        <Breadcrumbs items={[{ label: "Academics" }, { label: "Attendance", href: backHref }, { label: section.label }]} />
         <MarkSheet
           key={`${sp.section}-${date}-${session}`}
           sectionId={section.id}

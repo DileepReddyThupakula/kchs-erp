@@ -21,7 +21,6 @@ export type DailyRowView = {
   present: number;
   late: number;
   absent: number;
-  leave: number;
   total: number;
 };
 
@@ -39,7 +38,6 @@ export function DailyTable({ rows, date, canMark }: { rows: DailyRowView[]; date
     { id: "present", header: "Present", align: "right", cell: (r) => (r.marked ? r.present : "—"), exportValue: (r) => (r.marked ? r.present : "") },
     { id: "late", header: "Late", align: "right", cell: (r) => (r.marked ? r.late : "—"), exportValue: (r) => (r.marked ? r.late : "") },
     { id: "absent", header: "Absent", align: "right", cell: (r) => (r.marked ? <b className={r.absent ? "text-red-700" : ""}>{r.absent}</b> : "—"), exportValue: (r) => (r.marked ? r.absent : "") },
-    { id: "leave", header: "Leave", align: "right", cell: (r) => (r.marked ? r.leave : "—"), exportValue: (r) => (r.marked ? r.leave : "") },
     { id: "total", header: "Students", align: "right", cell: (r) => (r.marked ? r.total : "—"), exportValue: (r) => (r.marked ? r.total : "") },
     { id: "by", header: "Marked by", cell: (r) => r.by || <span className="text-muted">—</span>, exportValue: (r) => r.by },
     { id: "kind", header: "Type", cell: (r) => (r.marked ? KIND_LABEL[r.kind] ?? r.kind : "—"), defaultHidden: true, exportValue: (r) => (r.marked ? KIND_LABEL[r.kind] ?? r.kind : "") },

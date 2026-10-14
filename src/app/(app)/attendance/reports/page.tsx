@@ -59,7 +59,6 @@ export default async function AttendanceReportsPage({ searchParams }: { searchPa
       present: r.present,
       late: r.late,
       absent: r.absent,
-      leave: r.on_leave,
       total: r.total,
     }));
     return (

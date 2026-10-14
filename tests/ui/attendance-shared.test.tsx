@@ -3,11 +3,10 @@ import { DAY_MARK, attended, dayOfWeek, monthLabel, monthRange, shiftMonth } fro
 import { canOpenPage, findPage } from "@/lib/site-map";
 
 describe("attendance helpers", () => {
-  it("counts Present and Late as attended; Absent and Leave as not attended", () => {
+  it("counts Present and Late as attended; Absent as not attended", () => {
     expect(attended("present")).toBe(true);
     expect(attended("late")).toBe(true);
     expect(attended("absent")).toBe(false);
-    expect(attended("leave")).toBe(false);
     expect(attended(null)).toBe(false);
   });
   it("gives every daily status a printable mark", () => {
