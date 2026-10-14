@@ -13,6 +13,8 @@ import type { QrSettings } from "@/components/fees/upi-qr-dialog";
 import { formatDate } from "@/lib/utils";
 import { formatPaise } from "@/lib/money";
 import { filterCollectRows, summarize, type CollectRow, type CollectShow } from "@/features/fees/collect-list";
+import { Receipt, type ReceiptSchool } from "@/components/fees/receipt";
+import type { ReceiptDetail } from "@/features/fees/queries";
 import { MiscModal } from "./misc-modal";
 
 type Opt = { id: string; label: string; classId: string };
@@ -26,6 +28,7 @@ export function CollectList({
   sectionId,
   show,
   saved,
+  savedReceipt,
   isAdmin,
   pickerStudents,
   miscHeads,
@@ -39,6 +42,7 @@ export function CollectList({
   sectionId: string;
   show: CollectShow;
   saved: { id: string; no: string; amount: number; name: string } | null;
+  savedReceipt: { data: ReceiptDetail; school: ReceiptSchool } | null;
   isAdmin: boolean;
   pickerStudents: PickerStudent[];
   miscHeads: { id: string; name: string }[];
@@ -141,6 +145,13 @@ export function CollectList({
               </Link>
             </div>
           </div>
+          {savedReceipt && (
+            <div className="mt-4 overflow-x-auto rounded-lg bg-neutral-200/70 p-3 sm:p-5">
+              <div className="mx-auto w-fit shadow-[0_6px_20px_rgba(1,26,55,0.15)]">
+                <Receipt data={savedReceipt.data} school={savedReceipt.school} duplicate={false} />
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

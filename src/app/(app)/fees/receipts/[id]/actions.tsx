@@ -7,7 +7,8 @@ import { Printer, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonClasses } from "@/components/ui/button-classes";
 import { Modal } from "@/components/ui/dialog";
-import { Field, Input } from "@/components/ui/form";
+import { Field, Input, Select } from "@/components/ui/form";
+import { LAYOUTS } from "@/components/fees/receipt";
 import { formatPaise } from "@/lib/money";
 import { cancelReceiptAction } from "@/features/fees/actions";
 
@@ -16,9 +17,17 @@ export function ReceiptActions({ id, receiptNo, total, canCancel, cancelled }: {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [layout, setLayout] = useState("two");
   return (
     <>
-      <Link href={`/print/receipt/${id}?copy=duplicate`} target="_blank" className={buttonClasses("primary")}>
+      <Select aria-label="Copies and paper size" value={layout} onChange={(e) => setLayout(e.target.value)} className="w-44">
+        {LAYOUTS.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.label}
+          </option>
+        ))}
+      </Select>
+      <Link href={`/print/receipt/${id}?copy=duplicate&layout=${layout}`} target="_blank" className={buttonClasses("primary")}>
         <Printer className="size-4" aria-hidden /> Print duplicate
       </Link>
       {canCancel && !cancelled && (

@@ -174,8 +174,11 @@ export async function getReceipts(
 
 export type ReceiptDetail = {
   receipt: ReceiptRow & { payerName: string | null; cancelledAt: string | null };
-  items: { description: string; amount: number; isSpecial: boolean }[];
-  student: { name: string; adm: string; className: string | null; section: string | null } | null;
+  items: { description: string; amount: number; concession: number; isSpecial: boolean }[];
+  student: { name: string; adm: string; className: string | null; section: string | null; roll: number | null; guardian: string | null } | null;
+  /** Academic year of the receipt date, and what the student still owed right after this payment. */
+  academicYear: string | null;
+  balanceAfter: number | null;
 };
 
 /** One receipt with its line items and the student's class (RLS decides who may see it). */
@@ -186,18 +189,19 @@ export async function getReceiptDetail(supabase: Supa, id: string): Promise<Rece
   const headName = new Map(all.map((h) => [h.id, h.name]));
   const { data: items } = await supabase.from("fee_receipt_items").select("fee_head_id, amount_paise, due_id").eq("receipt_id", id);
   const dueIds = (items ?? []).map((i) => i.due_id).filter((x): x is string => !!x);
-  const { data: dues } = dueIds.length ? await supabase.from("student_fee_dues").select("id, label").in("id", dueIds) : { data: [] };
+  const { data: dues } = dueIds.length ? await supabase.from("student_fee_dues").select("id, label, concession_paise").in("id", dueIds) : { data: [] };
   const dueLabel = new Map((dues ?? []).map((d) => [d.id, d.label]));
+  const dueConcession = new Map((dues ?? []).map((d) => [d.id, Number(d.concession_paise)]));
+  const { data: years } = await supabase.from("academic_years").select("id, name, start_date, end_date");
+  const year = (years ?? []).find((yy) => yy.start_date <= r.receipt_date && r.receipt_date <= yy.end_date) ?? null;
   const { data: dir } = await supabase.rpc("staff_directory");
   const staff = new Map((dir ?? []).map((s) => [s.id, s.full_name]));
 
   let student: ReceiptDetail["student"] = null;
   if (r.student_id) {
     const { data: st } = await supabase.from("students").select("full_name, admission_no").eq("id", r.student_id).maybeSingle();
-    const { data: enr } = await supabase.from("student_enrollments").select("academic_year_id, section_id").eq("student_id", r.student_id);
-    const { data: years } = await supabase.from("academic_years").select("id, start_date, end_date");
-    const y = (years ?? []).find((yy) => yy.start_date <= r.receipt_date && r.receipt_date <= yy.end_date);
-    const e = (enr ?? []).find((x) => x.academic_year_id === y?.id) ?? (enr ?? [])[0];
+    const { data: enr } = await supabase.from("student_enrollments").select("academic_year_id, section_id, roll_no").eq("student_id", r.student_id);
+    const e = (enr ?? []).find((x) => x.academic_year_id === year?.id) ?? (enr ?? [])[0];
     let className: string | null = null;
     let section: string | null = null;
     if (e) {
@@ -208,12 +212,20 @@ export async function getReceiptDetail(supabase: Supa, id: string): Promise<Rece
         section = sec.name;
       }
     }
-    if (st) student = { name: st.full_name, adm: st.admission_no, className, section };
+    let guardian: string | null = null;
+    const { data: links } = await supabase.from("student_guardians").select("guardian_id, is_primary").eq("student_id", r.student_id);
+    const link = (links ?? []).find((l) => l.is_primary) ?? (links ?? [])[0];
+    if (link) {
+      const { data: g } = await supabase.from("guardians").select("full_name").eq("id", link.guardian_id).maybeSingle();
+      guardian = g?.full_name ?? null;
+    }
+    if (st) student = { name: st.full_name, adm: st.admission_no, className, section, roll: e?.roll_no ?? null, guardian };
   }
 
   const lines = (items ?? []).map((i) => ({
-    description: `${headName.get(i.fee_head_id) ?? "Fee"}${i.due_id && dueLabel.get(i.due_id) ? ` – ${dueLabel.get(i.due_id)}` : ""}`,
+    description: `${headName.get(i.fee_head_id) ?? "Fee"}${i.due_id && dueLabel.get(i.due_id) ? `, ${dueLabel.get(i.due_id)}` : ""}`,
     amount: Number(i.amount_paise),
+    concession: i.due_id ? (dueConcession.get(i.due_id) ?? 0) : 0,
     isSpecial: special.has(i.fee_head_id),
   }));
   const row: ReceiptRow = {
@@ -237,7 +249,33 @@ export async function getReceiptDetail(supabase: Supa, id: string): Promise<Rece
     heads: [],
     createdAt: r.created_at,
   };
-  return { receipt: { ...row, payerName: r.payer_name, cancelledAt: r.cancelled_at }, items: lines, student };
+
+  // Still owed right after this payment = owed now + what later (still valid) receipts took off.
+  let balanceAfter: number | null = null;
+  if (r.student_id && year && r.kind !== "misc") {
+    const { data: open } = await supabase
+      .from("student_fee_dues")
+      .select("amount_paise, concession_paise, paid_paise")
+      .eq("student_id", r.student_id)
+      .eq("academic_year_id", year.id)
+      .is("voided_at", null);
+    let owed = (open ?? []).reduce((a, x) => a + Number(x.amount_paise) - Number(x.concession_paise) - Number(x.paid_paise), 0);
+    if (r.status === "valid") {
+      const { data: later } = await supabase
+        .from("fee_receipts")
+        .select("id")
+        .eq("student_id", r.student_id)
+        .eq("status", "valid")
+        .gt("created_at", r.created_at);
+      const ids = (later ?? []).map((x) => x.id);
+      if (ids.length) {
+        const { data: li } = await supabase.from("fee_receipt_items").select("amount_paise, due_id").in("receipt_id", ids);
+        owed += (li ?? []).filter((x) => x.due_id).reduce((a, x) => a + Number(x.amount_paise), 0);
+      }
+    }
+    balanceAfter = Math.max(0, owed);
+  }
+  return { receipt: { ...row, payerName: r.payer_name, cancelledAt: r.cancelled_at }, items: lines, student, academicYear: year?.name ?? null, balanceAfter };
 }
 
 // ------------------------------------------------------------------ Collect fee list + payment settings

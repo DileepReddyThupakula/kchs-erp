@@ -21,6 +21,10 @@ insert into public.students (id, admission_no, full_name, gender, date_of_birth,
 insert into public.student_enrollments (student_id, academic_year_id, section_id) values ('56000000-0000-4000-f200-000000000001', '27000000-0000-4000-f200-000000000001', '3f000000-0000-4000-f200-000000000001');
 
 -- ============ modes: UPI / bank transfer optional, cheque required ============
+-- real settings changes made on this database before the test must not count
+create temp table _fs_base as select count(*)::int as n from public.audit_logs where action = 'fee_settings.update';
+grant select on _fs_base to public;
+
 select pg_temp.login_as('00000000-0000-4000-f200-000000000002');
 select pg_temp.lives($$select public.collect_fee('56000000-0000-4000-f200-000000000001', 10000, 'upi')$$, 'UPI saves without a reference');
 select pg_temp.lives($$select public.collect_fee('56000000-0000-4000-f200-000000000001', 10000, 'bank_transfer')$$, 'bank transfer saves without a reference');
@@ -54,7 +58,7 @@ select pg_temp.counts($$select count(*) from public.audit_logs where action = 'f
 select pg_temp.affects($$update public.fee_settings set upi_id = 'kchs.fees@okbank'$$, 1, 'admin: changes the UPI id again');
 select pg_temp.counts($$select count(*) from public.audit_logs where action = 'fee_settings.update' and details->>'upi_id_old' = 'kc***@okbank' and details->>'upi_id_new' = 'kc***@okbank'$$, 1, 'second change logged (old and new, masked)');
 select pg_temp.affects($$update public.fee_settings set payee_name = payee_name$$, 1, 'an unchanged save is allowed');
-select pg_temp.counts($$select count(*) from public.audit_logs where action = 'fee_settings.update'$$, 2, 'an unchanged save adds no audit entry');
+select pg_temp.counts($$select count(*) - (select n from _fs_base) from public.audit_logs where action = 'fee_settings.update'$$, 2, 'an unchanged save adds no audit entry');
 
 -- ============ require reference for UPI (Admin setting) ============
 select pg_temp.affects($$update public.fee_settings set require_upi_reference = true$$, 1, 'admin: turns on "Require reference for UPI"');

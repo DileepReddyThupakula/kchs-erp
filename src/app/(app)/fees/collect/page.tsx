@@ -1,10 +1,11 @@
+import { getReceiptSchool } from "@/features/fees/receipt-school";
 import { Wallet } from "lucide-react";
 import { requirePage } from "@/features/students/page-guard";
 import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
 import { EmptyState, PageHeader } from "@/components/ui/card";
-import { getCollectRows, getFeeHeads, getFeeSettings, getStudentLookup } from "@/features/fees/queries";
+import { getCollectRows, getFeeHeads, getReceiptDetail, getFeeSettings, getStudentLookup } from "@/features/fees/queries";
 import { todayIst } from "@/features/fees/shared";
 import { getSectionOptions } from "@/features/students/queries";
 import type { CollectShow } from "@/features/fees/collect-list";
@@ -71,6 +72,8 @@ export default async function CollectFeePage({
     const { data: r } = await supabase.from("fee_receipts").select("id, receipt_no, total_paise, student_id, payer_name").eq("id", sp.saved!).maybeSingle();
     if (r) saved = { id: r.id, no: r.receipt_no, amount: Number(r.total_paise), name: rows.find((x) => x.studentId === r.student_id)?.name ?? r.payer_name ?? "" };
   }
+  const savedDetail = saved ? await getReceiptDetail(supabase, saved.id) : null;
+  const receiptSchool = savedDetail ? await getReceiptSchool() : null;
   const isAdmin = can(me, "fees.setup");
   let pickerStudents: { id: string; name: string; adm: string; classLabel: string; phones: string[] }[] = [];
   let miscHeads: { id: string; name: string }[] = [];
@@ -91,6 +94,7 @@ export default async function CollectFeePage({
         sectionId={sectionId}
         show={show}
         saved={saved}
+        savedReceipt={savedDetail && receiptSchool ? { data: savedDetail, school: receiptSchool } : null}
         isAdmin={isAdmin}
         pickerStudents={pickerStudents}
         miscHeads={miscHeads}
