@@ -23,6 +23,7 @@ import { detailsChecklist } from "@/features/settings/missing";
 import { getMyClasses } from "@/features/my/queries";
 import { formatDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
+import { TodayStrip } from "@/components/timetable/today-strip";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard" };
@@ -117,6 +118,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           You don&apos;t have permission to open that page.
         </p>
       )}
+
+      {me.role === "teacher" && <TodayStrip />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map(({ label, value, icon: Icon, accent, href, hint }) => {

@@ -41,9 +41,19 @@ export default async function run({ ok, skip }) {
   const { error: freeErr } = await teacher.rpc("free_teachers", { p_date: new Date().toISOString().slice(0, 10), p_period: 1 });
   ok(!!freeErr, "API: teacher1 cannot ask for the free-teacher list");
 
+  // office teacher holds the timetable_edit duty in the demo: sees every entry and may use the editors' tools
   const office = await login("office@demo.kchs.test");
-  const { data: officeRows } = await office.from("timetable_entries").select("id");
-  ok(officeRows.length === 0, "API: office teacher (fee + student duties, no timetable duty) sees no timetable entries");
+  const { count: allCount } = await admin.from("timetable_entries").select("id", { head: true, count: "exact" });
+  const { data: officeRows } = await office.from("timetable_entries").select("id").limit(2000);
+  ok(officeRows.length === allCount, `API: office teacher (timetable_edit duty) sees all ${allCount} entries`, `got ${officeRows.length}`);
+  const { data: offFree, error: offFreeErr } = await office.rpc("free_teachers", { p_date: "2026-10-15", p_period: 1 });
+  ok(!offFreeErr && offFree.length > 0, "API: office teacher gets the free-teacher list", offFreeErr?.message);
+
+  // a second plain teacher (no duty) sees only their own periods
+  const t2c = await login("teacher2@demo.kchs.test");
+  const { data: t2rows } = await t2c.from("timetable_entries").select("id, teacher_id");
+  const { count: t2n } = await admin.from("timetable_entries").select("id", { head: true, count: "exact" }).eq("teacher_id", t2.id);
+  ok(t2rows.length === t2n && t2rows.every((r) => r.teacher_id === t2.id), `API: teacher2 sees exactly their own ${t2n} periods`, `got ${t2rows.length}`);
 
   const adm = await login("admin@demo.kchs.test");
   const { count: all } = await admin.from("timetable_entries").select("id", { head: true, count: "exact" });

@@ -314,6 +314,67 @@ type FK<Name extends string, Col extends string, Ref extends string> = {
   referencedColumns: ["id"];
 };
 
+export type BellSchedule = Stamps & { id: string; name: string; note: string | null; is_default: boolean };
+export type BellPeriod = Stamps & {
+  id: string;
+  schedule_id: string;
+  seq: number;
+  kind: "teaching" | "break" | "lunch";
+  period_no: number | null;
+  label: string | null;
+  start_time: string;
+  end_time: string;
+};
+export type ClassBellSchedule = Stamps & { class_id: string; weekday: number; schedule_id: string };
+export type TimetableEntry = Stamps & {
+  id: string;
+  academic_year_id: string;
+  section_id: string;
+  weekday: number;
+  period_no: number;
+  subject_id: string | null;
+  activity: string | null;
+  teacher_id: string | null;
+  room: string | null;
+  is_demo: boolean;
+};
+export type TimetableSubstitution = Stamps & {
+  id: string;
+  sub_date: string;
+  section_id: string;
+  period_no: number;
+  original_teacher_id: string;
+  substitute_teacher_id: string;
+  reason: string | null;
+  entered_by: string | null;
+  is_demo: boolean;
+};
+export type TimetablePeriodCount = {
+  assignment_id: string;
+  section_id: string;
+  subject_id: string;
+  staff_id: string;
+  target: number | null;
+  scheduled: number;
+  difference: number | null;
+  status: "over" | "under" | "ok" | "no_target";
+};
+export type MyWeekRow = {
+  on_date: string;
+  weekday: number;
+  period_no: number;
+  kind: "regular" | "substituted_out" | "substitute_in";
+  section_id: string;
+  section_label: string;
+  subject_name: string | null;
+  activity: string | null;
+  room: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  other_name: string | null;
+  reason: string | null;
+};
+
 export type Database = {
   __InternalSupabase: { PostgrestVersion: "14.18" };
   public: {
@@ -411,6 +472,11 @@ export type Database = {
         ]
       >;
       student_documents: T<StudentDocument, "student_id" | "doc_type" | "file_path" | "file_name" | "mime_type" | "size_bytes", [FK<"student_documents_student_id_fkey", "student_id", "students">]>;
+      bell_schedules: T<BellSchedule, "name">;
+      bell_periods: T<BellPeriod, "schedule_id" | "seq" | "kind" | "start_time" | "end_time">;
+      class_bell_schedules: T<ClassBellSchedule, "class_id" | "weekday" | "schedule_id">;
+      timetable_entries: T<TimetableEntry, "section_id" | "weekday" | "period_no">;
+      timetable_substitutions: T<TimetableSubstitution, "sub_date" | "section_id" | "period_no" | "original_teacher_id" | "substitute_teacher_id">;
       teacher_assignments: T<
         TeacherAssignment,
         "staff_id" | "section_id" | "subject_id",
@@ -421,7 +487,9 @@ export type Database = {
         ]
       >;
     };
-    Views: { [_ in never]: never };
+    Views: {
+      timetable_period_counts: { Row: TimetablePeriodCount; Relationships: [] };
+    };
     Functions: {
       generate_second_saturdays: { Args: { p_year_id: string }; Returns: number };
       log_event: {
@@ -449,6 +517,15 @@ export type Database = {
         Args: { p_fee_head_id: string; p_amount_paise: number; p_mode: string; p_reference?: string; p_student_id?: string; p_payer_name?: string; p_notes?: string; p_receipt_date?: string };
         Returns: string;
       };
+      session_markers: {
+        Args: { p_section: string; p_date: string };
+        Returns: { session: string; period_no: number; staff_id: string | null; source: string }[];
+      };
+      free_teachers: {
+        Args: { p_date: string; p_period: number; p_exclude?: string };
+        Returns: { id: string; full_name: string; employee_code: string; periods_that_day: number }[];
+      };
+      my_week: { Args: { p_week_start: string }; Returns: MyWeekRow[] };
       export_student_ids: { Args: { p_ids: string[] }; Returns: { student_id: string; field_key: string; value: string }[] };
       staff_directory: {
         Args: never;

@@ -83,14 +83,14 @@ export default async function run({ ok, skip }) {
     // substitutions: one substitute, one period, two sections, same moment
     await db.query(`insert into public.timetable_entries (section_id, weekday, period_no, subject_id, teacher_id) values ($1, 3, 4, $4, $2), ($3, 3, 4, $4, $5)`, [secs[0], t[0], secs[1], sub[0].id, t[1]]);
     // 2091-04-02 is a Wednesday? compute a Wednesday inside the year
-    const { rows: wed } = await db.query(`select to_char(d, 'YYYY-MM-DD') day from generate_series('2091-06-01'::date, '2091-06-10'::date, interval '1 day') d where extract(isodow from d) = 3 limit 1`);
+    const { rows: wed } = await db.query(`select to_char(d, 'YYYY-MM-DD') as day from generate_series('2091-06-01'::date, '2091-06-10'::date, interval '1 day') d where extract(isodow from d) = 3 limit 1`);
     const cover = (section, orig) =>
       asUser(url, adm[0].user_id, `insert into public.timetable_substitutions (sub_date, section_id, period_no, original_teacher_id, substitute_teacher_id) values ($1, $2, 4, $3, $4) returning id`, [wed[0].day, section, orig, t[2]]);
     const r4 = await Promise.all([cover(secs[0], t[0]), cover(secs[1], t[1])]);
     ok(r4.filter((r) => r.ok).length === 1, "one substitute cannot cover two classes in the same period (simultaneous)", r4.map((r) => (r.ok ? "ok" : r.error.message)).join(" | "));
 
     // entry vs substitution race for the SAME teacher / weekday / period
-    const { rows: wk } = await db.query(`select to_char(d, 'YYYY-MM-DD') day from generate_series('2091-06-11'::date, '2091-06-20'::date, interval '1 day') d where extract(isodow from d) = 4 limit 1`);
+    const { rows: wk } = await db.query(`select to_char(d, 'YYYY-MM-DD') as day from generate_series('2091-06-11'::date, '2091-06-20'::date, interval '1 day') d where extract(isodow from d) = 4 limit 1`);
     await db.query(`insert into public.timetable_entries (section_id, weekday, period_no, subject_id, teacher_id) values ($1, 4, 5, $3, $2)`, [secs[0], t[0], sub[0].id]);
     const coverThu = asUser(url, adm[0].user_id, `insert into public.timetable_substitutions (sub_date, section_id, period_no, original_teacher_id, substitute_teacher_id) values ($1, $2, 5, $3, $4) returning id`, [wk[0].day, secs[0], t[0], t[1]]);
     const entryThu = put(secs[1], 4, 5, t[1]);

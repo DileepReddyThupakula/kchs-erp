@@ -216,7 +216,13 @@ export async function wipeDemoTimetable() {
   try {
     const { rows: has } = await db.query("select to_regclass('public.timetable_entries') as t");
     if (!has[0].t) return console.log("Timetable tables not found: nothing to wipe.");
-    const subs = await db.query("delete from public.timetable_substitutions where is_demo");
+    // demo substitutions, plus any substitution (made by hand in the app) that points at a demo period
+    const subs = await db.query(
+      `delete from public.timetable_substitutions s
+       where s.is_demo or exists (select 1 from public.timetable_entries e
+                                  where e.is_demo and e.section_id = s.section_id and e.period_no = s.period_no
+                                    and e.weekday = extract(isodow from s.sub_date))`,
+    );
     const ent = await db.query("delete from public.timetable_entries where is_demo");
     console.log(`Removed ${ent.rowCount} demo timetable entries and ${subs.rowCount} demo substitutions. Bell schedules kept.`);
   } finally {
