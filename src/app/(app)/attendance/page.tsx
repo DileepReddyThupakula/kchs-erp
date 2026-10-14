@@ -39,9 +39,12 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
 
   // ---------------------------------------------------------------- one session
   if (sp.section && session) {
-    const section = sections.find((s) => s.id === sp.section);
     const { data: mine } = await supabase.rpc("my_attendance_sessions", { p_date: date });
-    const assigned = (mine ?? []).some((m) => m.section_id === sp.section && m.session === session);
+    const assignedRow = (mine ?? []).find((m) => m.section_id === sp.section && m.session === session);
+    const assigned = !!assignedRow;
+    // a substitute marker cannot read a section they do not teach: take its name from their assigned session
+    const known = sections.find((s) => s.id === sp.section);
+    const section = known ? { id: known.id, label: known.label } : assignedRow ? { id: assignedRow.section_id, label: assignedRow.section_label } : undefined;
     const saved = await getSavedSession(supabase, sp.section, date, session);
     const backHref = isAny ? `/attendance?date=${date}` : "/attendance";
     if (!section || (!isAny && !assigned && !saved)) {
