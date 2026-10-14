@@ -98,9 +98,11 @@ export function MarkSheet({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       rows[Math.min(rows.length - 1, i + 1)]?.focus();
+      rows[Math.min(rows.length - 1, i + 1)]?.scrollIntoView({ block: "nearest" });
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       rows[Math.max(0, i - 1)]?.focus();
+      rows[Math.max(0, i - 1)]?.scrollIntoView({ block: "nearest" });
     } else if (editable && !e.ctrlKey && !e.metaKey && !e.altKey) {
       const k = KEYS.find((x) => x.letter.toLowerCase() === e.key.toLowerCase());
       if (k) {
@@ -151,12 +153,12 @@ export function MarkSheet({
       </div>
 
       {lockNote && (
-        <p role="note" className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <p role="note" className="mx-auto mt-3 flex max-w-[720px] items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <Lock className="mt-0.5 size-4 shrink-0" aria-hidden /> {lockNote}
         </p>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mx-auto mt-3 flex max-w-[720px] flex-wrap items-center gap-2">
         <label className="relative">
           <span className="sr-only">Search students</span>
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
@@ -182,18 +184,13 @@ export function MarkSheet({
       </div>
 
       {error && (
-        <p role="alert" className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p role="alert" className="mx-auto mt-3 max-w-[720px] rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       )}
 
-      {/* two columns on wide screens, filled top-to-bottom so roll numbers read down each column */}
-      <ul
-        ref={listRef}
-        style={{ ["--rows" as string]: Math.max(1, Math.ceil(shown.length / 2)) }}
-        className="mt-3 grid grid-cols-1 gap-x-4 lg:grid-flow-col lg:grid-cols-2 lg:grid-rows-[repeat(var(--rows),minmax(0,auto))]"
-        aria-label="Students"
-      >
+      {/* one column in roll order, in a centred container so the buttons stay near the name */}
+      <ul ref={listRef} className="mx-auto mt-3 max-w-[720px] overflow-hidden rounded-lg border border-border bg-surface" aria-label="Students">
         {shown.map((s) => {
           const m = marks[s.studentId];
           const changed = editable && everSaved && m !== baseline[s.studentId];
@@ -204,7 +201,7 @@ export function MarkSheet({
               tabIndex={0}
               onKeyDown={(e) => onRowKey(e, s.studentId)}
               className={cn(
-                "flex min-h-11 items-center gap-2 border-b border-border px-2 outline-none focus-visible:bg-gold-50 focus-visible:ring-2 focus-visible:ring-gold-500",
+                "flex min-h-11 scroll-mt-32 items-center gap-2 border-b border-border px-3 outline-none odd:bg-white even:bg-cream-50 hover:bg-gold-50 focus-visible:bg-gold-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-500",
                 changed && "bg-amber-50/70",
               )}
             >
@@ -236,7 +233,7 @@ export function MarkSheet({
             </li>
           );
         })}
-        {shown.length === 0 && <li className="col-span-full px-3 py-6 text-center text-sm text-muted">{students.length ? "No student matches your search." : "No students are enrolled in this section on this date."}</li>}
+        {shown.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted">{students.length ? "No student matches your search." : "No students are enrolled in this section on this date."}</li>}
       </ul>
     </div>
   );

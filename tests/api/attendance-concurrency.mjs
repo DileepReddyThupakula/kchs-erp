@@ -74,7 +74,7 @@ export default async function run({ ok, skip }) {
       ["present", "present", "present", "present"],
       ["absent", "present", "present", "present"],
       ["present", "absent", "late", "present"],
-      ["present", "present", "present", "leave"],
+      ["present", "present", "late", "absent"],
       ["late", "present", "present", "present"],
       ["present", "present", "absent", "absent"],
     ];
