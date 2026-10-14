@@ -90,7 +90,8 @@ select pg_temp.throws($$select public.collect_fee('54000000-0000-4000-f000-00000
 select pg_temp.lives($$select public.collect_fee('54000000-0000-4000-f000-000000000003', 950001, 'cheque', 'CHQ-77')$$, 'paying exactly the full balance is allowed');
 select pg_temp.counts($$select sum(amount_paise - concession_paise - paid_paise) from public.student_fee_dues where student_id = '54000000-0000-4000-f000-000000000003' and voided_at is null$$, 0, 'balance is now zero');
 select pg_temp.throws($$select public.collect_fee('54000000-0000-4000-f000-000000000003', 1, 'cash')$$, 'nothing more can be paid once settled', '23514');
-select pg_temp.throws($$select public.collect_fee('54000000-0000-4000-f000-000000000004', 1000, 'upi')$$, 'UPI / cheque / transfer need a reference number', '23514');
+-- rule changed (DECISIONS.md F22): only a cheque needs a number; UPI and bank transfer are optional
+select pg_temp.throws($$select public.collect_fee('54000000-0000-4000-f000-000000000004', 1000, 'cheque')$$, 'a cheque needs its cheque number', '23514');
 select pg_temp.throws($$select public.collect_fee('54000000-0000-4000-f000-000000000004', 0, 'cash')$$, 'zero amount is rejected', '23514');
 select pg_temp.throws($$select public.collect_fee('54000000-0000-4000-f000-000000000004', 1000, 'cash', null, null, null, '2080-05-01')$$, 'fee duty: cannot backdate a receipt', '42501');
 -- receipts: sequential, unique, collected_by recorded

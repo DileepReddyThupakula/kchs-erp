@@ -280,6 +280,14 @@ export type FeeCampaign = Stamps & {
   cancel_reason: string | null;
   is_demo: boolean;
 };
+export type FeeSettings = Stamps & {
+  id: number;
+  upi_id: string | null;
+  payee_name: string | null;
+  qr_path: string | null;
+  require_upi_reference: boolean;
+  changed_by_name: string | null;
+};
 export type FeeCampaignClassAmount = Stamps & { campaign_id: string; class_id: string; amount_paise: number };
 export type FeeCampaignStudent = Stamps & { campaign_id: string; student_id: string };
 export type Subject = Stamps & {
@@ -374,6 +382,7 @@ export type Database = {
         "academic_year_id" | "fee_head_id" | "plan_id" | "name" | "amount_mode" | "audience",
         [FK<"fee_campaigns_fee_head_id_fkey", "fee_head_id", "fee_heads">, FK<"fee_campaigns_plan_id_fkey", "plan_id", "fee_plans">]
       >;
+      fee_settings: T<FeeSettings, never>;
       fee_campaign_class_amounts: T<FeeCampaignClassAmount, "campaign_id" | "class_id" | "amount_paise">;
       fee_campaign_students: T<FeeCampaignStudent, "campaign_id" | "student_id">;
       student_field_definitions: T<StudentFieldDefinition, "key" | "label" | "field_group" | "field_type">;

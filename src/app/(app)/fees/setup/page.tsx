@@ -6,10 +6,11 @@ import { getAcademicYears, resolveYear } from "@/lib/settings";
 import { EmptyState, PageHeader } from "@/components/ui/card";
 import { LinkTabs } from "@/components/ui/tabs";
 import { YearPicker } from "@/components/ui/year-picker";
-import { getFeeHeads, getStudentLookup } from "@/features/fees/queries";
+import { getFeeHeads, getFeeSettings, getStudentLookup } from "@/features/fees/queries";
 import { getSectionOptions } from "@/features/students/queries";
 import { AmountsTab } from "./amounts-tab";
 import { HeadsTab } from "./heads-tab";
+import { PaymentsTab } from "./payments-tab";
 import { PlansTab } from "./plans-tab";
 import { SpecialTab, type CampaignRow } from "./special-tab";
 import { RegenerateButton } from "./regenerate";
@@ -60,9 +61,11 @@ export default async function FeeSetupPage({ searchParams }: { searchParams: Pro
           { id: "heads", label: "Fee heads", href: q("heads"), count: regular.length },
           { id: "plans", label: "Plans & schedules", href: q("plans"), count: (plans ?? []).filter((p) => !p.name.startsWith("Special: ")).length },
           { id: "special", label: "Special fees", href: q("special"), count: (campaigns ?? []).length },
+          { id: "payments", label: "Payment QR", href: q("payments") },
         ]}
       />
       {tab === "heads" && <HeadsTab heads={regular} />}
+      {tab === "payments" && <PaymentsTab settings={await getFeeSettings(supabase)} />}
       {tab === "plans" && (
         <PlansTab
           yearId={year.id}
@@ -80,7 +83,7 @@ export default async function FeeSetupPage({ searchParams }: { searchParams: Pro
           special={special}
         />
       )}
-      {tab !== "heads" && tab !== "plans" && tab !== "special" && (
+      {tab !== "heads" && tab !== "plans" && tab !== "special" && tab !== "payments" && (
         <AmountsTab
           yearId={year.id}
           yearName={year.name}

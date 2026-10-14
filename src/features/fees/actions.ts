@@ -6,6 +6,7 @@ import { requireCapability } from "@/lib/auth/session";
 import { parseRupees } from "@/lib/money";
 import { friendlyDbError, type ActionState } from "@/lib/utils";
 import type { Json } from "@/types/database";
+import { UPI_ID_RE } from "./upi";
 import { getFeeHeads, toDueRow, type DueRow } from "./queries";
 
 const uuid = z.string().uuid();
@@ -332,7 +333,7 @@ export async function getStudentFeeDues(studentId: string): Promise<{ dues?: Due
 }
 
 // ------------------------------------------------------------------ collect
-export type CollectInput = { studentId: string; amountPaise: number; mode: string; reference: string; notes: string; dueIds: string[] };
+export type CollectInput = { studentId: string; amountPaise: number; mode: string; reference: string; notes: string; dueIds: string[]; upiConfirmed?: boolean };
 export type CollectResult = { ok: true; receiptId: string; receiptNo: string; repeated?: boolean } | { ok: false; error: string };
 
 export async function collectFeeAction(input: CollectInput): Promise<CollectResult> {
@@ -345,11 +346,13 @@ export async function collectFeeAction(input: CollectInput): Promise<CollectResu
       reference: z.string().trim().max(60),
       notes: z.string().trim().max(200),
       dueIds: z.array(uuid).max(200),
+      upiConfirmed: z.boolean().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "Please check the amount, mode and reference." };
   const p = parsed.data;
-  if (p.mode !== "cash" && !p.reference) return { ok: false, error: "A reference number is required for UPI, cheque and bank transfer." };
+  // The system can't see the bank. A person must confirm UPI payments.
+  if (p.mode === "upi" && !p.upiConfirmed) return { ok: false, error: "Please tick the confirmation that you have seen the payment in the bank / UPI app." };
   const supabase = await createClient();
 
   // Double-click guard: the same person saving the identical payment within
@@ -382,7 +385,7 @@ export async function collectFeeAction(input: CollectInput): Promise<CollectResu
   return { ok: true, receiptId: data, receiptNo: rec?.receipt_no ?? "" };
 }
 
-export type MiscInput = { feeHeadId: string; newHeadName: string; amountPaise: number; mode: string; reference: string; studentId: string; payerName: string; notes: string };
+export type MiscInput = { feeHeadId: string; newHeadName: string; amountPaise: number; mode: string; reference: string; studentId: string; payerName: string; notes: string; upiConfirmed?: boolean };
 
 export async function createMiscReceiptAction(input: MiscInput): Promise<CollectResult> {
   await requireCapability("fees.setup"); // Admin only
@@ -396,9 +399,11 @@ export async function createMiscReceiptAction(input: MiscInput): Promise<Collect
       studentId: z.string(),
       payerName: z.string().trim().max(80),
       notes: z.string().trim().max(200),
+      upiConfirmed: z.boolean().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "Please check the amount and mode." };
+  if (parsed.data.mode === "upi" && !parsed.data.upiConfirmed) return { ok: false, error: "Please tick the confirmation that you have seen the payment in the bank / UPI app." };
   const p = parsed.data;
   const supabase = await createClient();
   let headId = p.feeHeadId;
@@ -445,4 +450,51 @@ export async function cancelReceiptAction(id: string, reason: string): Promise<A
   if (error) return invalid(dbMessage(error));
   refresh("/fees", "/students");
   return { ok: true, message: "Receipt cancelled. The dues were restored; the receipt number stays visible." };
+}
+
+// ------------------------------------------------------------------ payment settings (Admin)
+export async function savePaymentSettings(_: ActionState, fd: FormData): Promise<ActionState> {
+  await requireCapability("fees.setup"); // Admin only; the database refuses anyone else too
+  const upi = String(fd.get("upi_id") ?? "").trim();
+  const payee = String(fd.get("payee_name") ?? "").trim();
+  if (upi && !UPI_ID_RE.test(upi)) return invalid("Enter a valid UPI ID like school@okbank", "upi_id");
+  if (upi && payee.length < 2) return invalid("Enter the payee name shown in the UPI app", "payee_name");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("fee_settings")
+    .update({ upi_id: upi || null, payee_name: payee || null, require_upi_reference: fd.get("require_upi_reference") === "on" })
+    .eq("id", 1);
+  if (error) return invalid(dbMessage(error));
+  refresh("/fees");
+  return { ok: true, message: "Payment settings saved." };
+}
+
+export async function uploadPaymentQr(_: ActionState, fd: FormData): Promise<ActionState> {
+  await requireCapability("fees.setup");
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) return invalid("Choose the QR image.", "file");
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) return invalid("Use a PNG, JPG or WEBP image.", "file");
+  if (file.size > 2 * 1024 * 1024) return invalid("The image must be under 2 MB.", "file");
+  const supabase = await createClient();
+  const { data: cur } = await supabase.from("fee_settings").select("qr_path").eq("id", 1).single();
+  const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `qr-${Date.now()}.${ext}`;
+  const up = await supabase.storage.from("payment-qr").upload(path, file, { contentType: file.type });
+  if (up.error) return invalid(up.error.message);
+  const { error } = await supabase.from("fee_settings").update({ qr_path: path }).eq("id", 1);
+  if (error) return invalid(dbMessage(error));
+  if (cur?.qr_path) await supabase.storage.from("payment-qr").remove([cur.qr_path]);
+  refresh("/fees");
+  return { ok: true, message: "QR image uploaded." };
+}
+
+export async function removePaymentQr(): Promise<ActionState> {
+  await requireCapability("fees.setup");
+  const supabase = await createClient();
+  const { data: cur } = await supabase.from("fee_settings").select("qr_path").eq("id", 1).single();
+  const { error } = await supabase.from("fee_settings").update({ qr_path: null }).eq("id", 1);
+  if (error) return invalid(dbMessage(error));
+  if (cur?.qr_path) await supabase.storage.from("payment-qr").remove([cur.qr_path]);
+  refresh("/fees");
+  return { ok: true, message: "QR image removed." };
 }

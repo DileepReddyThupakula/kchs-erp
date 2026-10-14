@@ -239,3 +239,91 @@ export async function getReceiptDetail(supabase: Supa, id: string): Promise<Rece
   };
   return { receipt: { ...row, payerName: r.payer_name, cancelledAt: r.cancelled_at }, items: lines, student };
 }
+
+// ------------------------------------------------------------------ Collect fee list + payment settings
+import type { CollectRow } from "./collect-list";
+
+/** Every active enrolled student with their outstanding / overdue / last payment (for the class-wise list). */
+export async function getCollectRows(supabase: Supa, yearId: string, today: string): Promise<CollectRow[]> {
+  const [students, enrolments, sections, links, guardians, dues, receipts] = await Promise.all([
+    fetchAll((f, t) => supabase.from("students").select("id, admission_no, full_name, status").eq("status", "active").range(f, t)),
+    fetchAll((f, t) => supabase.from("student_enrollments").select("student_id, section_id, roll_no").eq("academic_year_id", yearId).range(f, t)),
+    getSectionOptions(supabase, yearId),
+    fetchAll((f, t) => supabase.from("student_guardians").select("student_id, guardian_id, is_primary").range(f, t)),
+    fetchAll((f, t) => supabase.from("guardians").select("id, phone").not("phone", "is", null).range(f, t)),
+    fetchAll((f, t) =>
+      supabase.from("student_fee_dues").select("student_id, due_date, amount_paise, concession_paise, paid_paise").eq("academic_year_id", yearId).is("voided_at", null).range(f, t),
+    ),
+    fetchAll((f, t) => supabase.from("fee_receipts").select("student_id, receipt_date").eq("status", "valid").not("student_id", "is", null).range(f, t)),
+  ]);
+  const sec = new Map(sections.map((s) => [s.id, s]));
+  const enrol = new Map(enrolments.map((e) => [e.student_id, e]));
+  const phone = new Map(guardians.map((g) => [g.id, g.phone as string]));
+  const phoneOf = new Map<string, string>();
+  for (const l of [...links].sort((a, b) => Number(b.is_primary) - Number(a.is_primary))) {
+    const p = phone.get(l.guardian_id);
+    if (p && !phoneOf.has(l.student_id)) phoneOf.set(l.student_id, p);
+  }
+  const due = new Map<string, { total: number; overdue: number }>();
+  for (const d of dues) {
+    const bal = Number(d.amount_paise) - Number(d.concession_paise) - Number(d.paid_paise);
+    if (bal <= 0) continue;
+    const cur = due.get(d.student_id) ?? { total: 0, overdue: 0 };
+    cur.total += bal;
+    if (d.due_date < today) cur.overdue += bal;
+    due.set(d.student_id, cur);
+  }
+  const last = new Map<string, string>();
+  for (const r of receipts) if (r.student_id && (!last.get(r.student_id) || r.receipt_date > last.get(r.student_id)!)) last.set(r.student_id, r.receipt_date);
+
+  const rows: CollectRow[] = [];
+  for (const s of students) {
+    const e = enrol.get(s.id);
+    if (!e) continue;
+    const sc = sec.get(e.section_id);
+    rows.push({
+      studentId: s.id,
+      name: s.full_name,
+      adm: s.admission_no,
+      classId: sc?.classId ?? null,
+      sectionId: sc?.id ?? null,
+      classLabel: sc ? `${sc.className} – ${sc.section}` : "—",
+      classOrder: sc?.classOrder ?? 999,
+      roll: e.roll_no,
+      phone: phoneOf.get(s.id) ?? null,
+      totalDue: due.get(s.id)?.total ?? 0,
+      overdue: due.get(s.id)?.overdue ?? 0,
+      lastPayment: last.get(s.id) ?? null,
+    });
+  }
+  return rows;
+}
+
+export type FeeSettingsView = {
+  upiId: string | null;
+  payeeName: string | null;
+  qrUrl: string | null;
+  hasQrImage: boolean;
+  requireUpiReference: boolean;
+  changedBy: string | null;
+  changedAt: string | null;
+};
+
+/** School UPI / QR settings. QR image comes back as a 1-hour signed link (private bucket). */
+export async function getFeeSettings(supabase: Supa): Promise<FeeSettingsView> {
+  const { data } = await supabase.from("fee_settings").select("*").eq("id", 1).maybeSingle();
+  let qrUrl: string | null = null;
+  if (data?.qr_path) {
+    const { data: signed } = await supabase.storage.from("payment-qr").createSignedUrl(data.qr_path, 3600);
+    qrUrl = signed?.signedUrl ?? null;
+  }
+  return {
+    upiId: data?.upi_id ?? null,
+    payeeName: data?.payee_name ?? null,
+    qrUrl,
+    hasQrImage: !!data?.qr_path,
+    requireUpiReference: data?.require_upi_reference ?? false,
+    changedBy: data?.changed_by_name ?? null,
+    changedAt: data?.updated_by ? (data.updated_at ?? null) : null,
+  };
+}

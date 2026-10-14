@@ -1,6 +1,6 @@
 "use client";
 import { useMemo } from "react";
-import { Banknote, Receipt, XCircle } from "lucide-react";
+import { Banknote, Receipt, Smartphone, XCircle } from "lucide-react";
 import { DataTable, type Column } from "@/components/data-table/data-table";
 import { Badge, Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
@@ -88,6 +88,11 @@ export function ReportView({ rows, from, to, single, classes }: { rows: ReceiptR
     return [...m.values()].sort((a, b) => a.key.localeCompare(b.key));
   }, [valid]);
 
+  // UPI is kept apart so the office can match it to the bank / UPI statement
+  const upi = useMemo(() => {
+    const list = valid.filter((r) => r.mode === "upi");
+    return { count: list.length, amount: list.reduce((a, r) => a + r.total, 0), noRef: list.filter((r) => !r.reference).length };
+  }, [valid]);
   const label = single ? from : `${from}_to_${to}`;
   return (
     <div className="space-y-6">
@@ -124,6 +129,21 @@ export function ReportView({ rows, from, to, single, classes }: { rows: ReceiptR
           <p className="text-xs text-muted">Miscellaneous receipts</p>
         </Card>
       </div>
+
+      <Card className="flex flex-wrap items-center gap-4 border-gold-200 bg-gold-50/60">
+        <span className="grid size-11 place-items-center rounded-xl bg-gold-100 text-gold-800">
+          <Smartphone className="size-5" aria-hidden />
+        </span>
+        <div className="min-w-48">
+          <p className="text-2xl font-semibold tabular-nums text-navy-900">{formatPaise(upi.amount)}</p>
+          <p className="text-xs text-muted">
+            UPI collected · {upi.count} receipt{upi.count === 1 ? "" : "s"}
+          </p>
+        </div>
+        <p className="text-xs text-muted sm:ml-auto sm:max-w-sm">
+          Match this total with the bank / UPI statement.{upi.noRef > 0 ? ` ${upi.noRef} UPI receipt${upi.noRef === 1 ? " has" : "s have"} no transaction ID.` : ""} Filter the list below by Mode → UPI to see each one.
+        </p>
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Summary id="report-mode" title="By payment mode" rows={byMode} exportName={`collection-by-mode-${label}`} first="Payment mode" />

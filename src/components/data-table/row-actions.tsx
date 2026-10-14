@@ -53,7 +53,7 @@ export function RowActionsCell({ actions, rowLabel, onRun }: { actions: RowActio
           view,
           "hidden h-8 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-navy-700 transition-colors hover:bg-navy-50 hover:text-navy-900 sm:inline-flex",
           <>
-            <Eye className="size-4" aria-hidden />
+            {view.icon ? <view.icon className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
             <span className="hidden xl:inline">{view.label}</span>
           </>,
         )}
