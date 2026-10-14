@@ -95,8 +95,8 @@ export function ClassEditor({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_20rem]">
-      <div className="space-y-3">
+    <div className="grid gap-4 min-[1500px]:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" size="sm" onClick={() => setCopyOpen(true)}>
             <Copy className="size-4" /> Copy a day

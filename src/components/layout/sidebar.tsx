@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Permissions } from "@/lib/auth/permissions";
 import { buildMenu } from "@/lib/site-map";
@@ -11,6 +11,24 @@ import { LogoBadge } from "@/components/brand/logo-badge";
 export function Sidebar({ perms, shortName, logoUrl }: { perms: Permissions; shortName: string; logoUrl: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // collapsed group labels, remembered in this browser
+  const [collapsed, setCollapsed] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("kchs-nav-collapsed");
+      if (raw) setCollapsed(JSON.parse(raw));
+    } catch {
+      /* storage unavailable: all groups open */
+    }
+  }, []);
+  const remember = (next: string[]) => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem("kchs-nav-collapsed", JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  };
 
   // Close the mobile drawer on navigation and with Escape.
   useEffect(() => setOpen(false), [pathname]);
@@ -26,6 +44,12 @@ export function Sidebar({ perms, shortName, logoUrl }: { perms: Permissions; sho
   const isActive = (href: string) =>
     pathname === href ||
     (pathname.startsWith(href + "/") && !allPaths.some((o) => o !== href && o.startsWith(href + "/") && (pathname === o || pathname.startsWith(o + "/"))));
+
+  // the group of the current page is always opened
+  const activeGroup = groups.find((g) => g.label && g.items.some((i) => isActive(i.path)))?.label;
+  useEffect(() => {
+    if (activeGroup) setCollapsed((c) => (c.includes(activeGroup) ? c.filter((l) => l !== activeGroup) : c));
+  }, [activeGroup, pathname]);
 
   const brand = (
     <Link href="/dashboard" className="flex items-center gap-3">
@@ -73,35 +97,50 @@ export function Sidebar({ perms, shortName, logoUrl }: { perms: Permissions; sho
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-3 py-4">
-          {groups.map((g, gi) => (
-            <div key={gi} className="mb-5">
-              {g.label && <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-300">{g.label}</p>}
-              <ul className="space-y-0.5">
-                {g.items.map(({ path: href, name: label, icon: Icon, status }) => {
-                  const active = isActive(href);
-                  return (
-                    <li key={href}>
-                      <Link
-                        href={href}
-                        aria-current={active ? "page" : undefined}
-                        className={cn(
-                          "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                          active ? "bg-white/10 font-semibold text-gold-400" : "text-navy-100 hover:bg-white/5 hover:text-white",
-                        )}
-                      >
-                        {active && <span className="absolute inset-y-1.5 left-0 w-1 rounded-r-full bg-gold-500" aria-hidden />}
-                        <Icon className={cn("size-[18px] shrink-0", active ? "text-gold-400" : "text-navy-300 group-hover:text-cream-100")} aria-hidden />
-                        <span className="flex-1">{label}</span>
-                        {status === "planned" && (
-                          <span className="rounded-full bg-white/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-navy-300">Soon</span>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+          {groups.map((g, gi) => {
+            const isOpen = !g.label || !collapsed.includes(g.label);
+            const listId = `nav-group-${gi}`;
+            return (
+              <div key={gi} className="mb-3">
+                {g.label && (
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    aria-controls={listId}
+                    onClick={() => remember(isOpen ? [...collapsed, g.label!] : collapsed.filter((l) => l !== g.label))}
+                    className="mb-1 flex w-full items-center justify-between rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-navy-300 hover:bg-white/5 hover:text-cream-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-gold-500"
+                  >
+                    {g.label}
+                    <ChevronDown className={cn("size-4 transition-transform", !isOpen && "-rotate-90")} aria-hidden />
+                  </button>
+                )}
+                <ul id={listId} hidden={!isOpen} className="space-y-0.5">
+                  {g.items.map(({ path: href, name: label, icon: Icon, status }) => {
+                    const active = isActive(href);
+                    return (
+                      <li key={href}>
+                        <Link
+                          href={href}
+                          aria-current={active ? "page" : undefined}
+                          className={cn(
+                            "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                            active ? "bg-white/10 font-semibold text-gold-400" : "text-navy-100 hover:bg-white/5 hover:text-white",
+                          )}
+                        >
+                          {active && <span className="absolute inset-y-1.5 left-0 w-1 rounded-r-full bg-gold-500" aria-hidden />}
+                          <Icon className={cn("size-[18px] shrink-0", active ? "text-gold-400" : "text-navy-300 group-hover:text-cream-100")} aria-hidden />
+                          <span className="flex-1">{label}</span>
+                          {status === "planned" && (
+                            <span className="rounded-full bg-white/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-navy-300">Soon</span>
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       </nav>
     </>
