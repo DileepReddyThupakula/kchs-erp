@@ -75,6 +75,7 @@ export type SchoolSettings = Stamps & {
   timezone: string;
   mediums: string[];
   working_days: number[];
+  low_attendance_pct: number;
   second_saturday_holiday: boolean;
   periods_per_day: number;
   admission_no_prefix: string;
@@ -375,6 +376,66 @@ export type MyWeekRow = {
   reason: string | null;
 };
 
+export type AttendanceSession = Stamps & {
+  id: string;
+  academic_year_id: string;
+  section_id: string;
+  att_date: string;
+  session: "morning" | "afternoon";
+  period_no: number | null;
+  assigned_to: string | null;
+  marked_by: string | null;
+  marked_at: string;
+  kind: "regular" | "substitute" | "correction";
+  status: string;
+  is_demo: boolean;
+};
+export type StudentAttendanceRow = Stamps & {
+  id: string;
+  session_id: string;
+  student_id: string;
+  att_date: string;
+  session: "morning" | "afternoon";
+  status: "present" | "absent" | "late" | "leave";
+  note: string | null;
+  marked_by: string | null;
+  is_demo: boolean;
+};
+export type AttendanceDaily = {
+  student_id: string;
+  att_date: string;
+  morning: string | null;
+  afternoon: string | null;
+  sessions_marked: number;
+  sessions_attended: number;
+  day_status: "present" | "absent" | "morning_only" | "afternoon_only" | "one_session_present" | "one_session_absent";
+};
+export type LeaveType = Stamps & { id: string; name: string; default_days: number | null; is_active: boolean; sort_order: number };
+export type LeaveBalanceRow = Stamps & { id: string; staff_id: string; leave_type_id: string; academic_year_id: string; allowance_days: number | null };
+export type LeaveRequest = Stamps & {
+  id: string;
+  staff_id: string;
+  leave_type_id: string;
+  from_date: string;
+  to_date: string;
+  days: number;
+  reason: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  is_demo: boolean;
+};
+export type StaffAttendanceRow = Stamps & {
+  id: string;
+  staff_id: string;
+  att_date: string;
+  status: "present" | "absent" | "late" | "on_leave";
+  note: string | null;
+  marked_by: string | null;
+  is_demo: boolean;
+};
+
 export type Database = {
   __InternalSupabase: { PostgrestVersion: "14.18" };
   public: {
@@ -472,6 +533,12 @@ export type Database = {
         ]
       >;
       student_documents: T<StudentDocument, "student_id" | "doc_type" | "file_path" | "file_name" | "mime_type" | "size_bytes", [FK<"student_documents_student_id_fkey", "student_id", "students">]>;
+      attendance_sessions: T<AttendanceSession, "academic_year_id" | "section_id" | "att_date" | "session" | "kind">;
+      student_attendance: T<StudentAttendanceRow, "session_id" | "student_id" | "status">;
+      leave_types: T<LeaveType, "name">;
+      leave_balances: T<LeaveBalanceRow, "staff_id" | "leave_type_id" | "academic_year_id">;
+      leave_requests: T<LeaveRequest, "staff_id" | "leave_type_id" | "from_date" | "to_date" | "reason">;
+      staff_attendance: T<StaffAttendanceRow, "staff_id" | "att_date" | "status">;
       bell_schedules: T<BellSchedule, "name">;
       bell_periods: T<BellPeriod, "schedule_id" | "seq" | "kind" | "start_time" | "end_time">;
       class_bell_schedules: T<ClassBellSchedule, "class_id" | "weekday" | "schedule_id">;
@@ -489,6 +556,7 @@ export type Database = {
     };
     Views: {
       timetable_period_counts: { Row: TimetablePeriodCount; Relationships: [] };
+      attendance_daily: { Row: AttendanceDaily; Relationships: [] };
     };
     Functions: {
       generate_second_saturdays: { Args: { p_year_id: string }; Returns: number };
@@ -525,6 +593,48 @@ export type Database = {
         Args: { p_date: string; p_period: number; p_exclude?: string };
         Returns: { id: string; full_name: string; employee_code: string; periods_that_day: number }[];
       };
+      mark_attendance: { Args: { p_section: string; p_date: string; p_session: string; p_entries: Json }; Returns: string };
+      attendance_roster: { Args: { p_section: string; p_date: string }; Returns: { student_id: string; admission_no: string; full_name: string; roll_no: number | null }[] };
+      my_attendance_sessions: {
+        Args: { p_date?: string };
+        Returns: { section_id: string; section_label: string; session: string; period_no: number; source: string; marked: boolean; marked_kind: string | null }[];
+      };
+      unmarked_sessions: {
+        Args: { p_date?: string };
+        Returns: { section_id: string; section_label: string; session: string; period_no: number; staff_id: string | null; staff_name: string | null; source: string }[];
+      };
+      daily_attendance_summary: {
+        Args: { p_date: string };
+        Returns: { section_id: string; section_label: string; session: string; marked: boolean; marked_by_name: string | null; kind: string | null; present: number; late: number; absent: number; on_leave: number; total: number }[];
+      };
+      attendance_summary: {
+        Args: { p_student: string; p_from: string; p_to: string };
+        Returns: { sessions_marked: number; sessions_attended: number; pct: number | null; full_days: number; half_days: number; absent_days: number }[];
+      };
+      section_attendance: {
+        Args: { p_section: string; p_from: string; p_to: string };
+        Returns: { student_id: string; admission_no: string; full_name: string; roll_no: number | null; sessions_marked: number; sessions_attended: number; pct: number | null; full_days: number; half_days: number; absent_days: number }[];
+      };
+      leave_balance: {
+        Args: { p_staff: string; p_year: string };
+        Returns: { leave_type_id: string; leave_type: string; allowance: number | null; used: number; pending: number; remaining: number | null }[];
+      };
+      decide_leave: { Args: { p_id: string; p_approve: boolean; p_note?: string }; Returns: undefined };
+      cancel_leave: { Args: { p_id: string }; Returns: undefined };
+      approved_leave_periods: {
+        Args: { p_date: string };
+        Returns: { staff_id: string; staff_name: string; leave_type: string; section_id: string; section_label: string; period_no: number; covered: boolean }[];
+      };
+      staff_attendance_sheet: {
+        Args: { p_date: string };
+        Returns: { staff_id: string; full_name: string; employee_code: string; designation: string | null; status: string | null; prefilled: boolean; note: string | null }[];
+      };
+      mark_staff_attendance: { Args: { p_date: string; p_rows: Json }; Returns: number };
+      staff_attendance_month: {
+        Args: { p_month: string };
+        Returns: { staff_id: string; full_name: string; present: number; late: number; absent: number; on_leave: number }[];
+      };
+      leave_taken: { Args: { p_from: string; p_to: string }; Returns: { staff_id: string; full_name: string; leave_type: string; days: number }[] };
       my_week: { Args: { p_week_start: string }; Returns: MyWeekRow[] };
       export_student_ids: { Args: { p_ids: string[] }; Returns: { student_id: string; field_key: string; value: string }[] };
       staff_directory: {

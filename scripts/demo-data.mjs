@@ -49,7 +49,7 @@ export const DEMO_STAFF = [
 
 /** Duties for demo teachers (employee code -> duties). */
 export const DEMO_DUTIES = {
-  "DEMO-CS": ["fee_collection", "student_records", "timetable_edit"],
+  "DEMO-CS": ["fee_collection", "student_records", "timetable_edit", "all_class_attendance"],
 };
 
 /**

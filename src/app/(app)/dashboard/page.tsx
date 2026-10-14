@@ -24,6 +24,7 @@ import { getMyClasses } from "@/features/my/queries";
 import { formatDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { TodayStrip } from "@/components/timetable/today-strip";
+import { AttendanceDashboard } from "@/components/attendance/dashboard-card";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard" };
@@ -120,6 +121,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       )}
 
       {me.role === "teacher" && <TodayStrip />}
+      <AttendanceDashboard me={me} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map(({ label, value, icon: Icon, accent, href, hint }) => {

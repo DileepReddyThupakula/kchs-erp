@@ -14,6 +14,7 @@ import {
   BookOpenCheck,
   CalendarCheck,
   CalendarClock,
+  CalendarOff,
   CalendarDays,
   ClipboardList,
   ClipboardPen,
@@ -87,8 +88,9 @@ export const PAGES: PageDef[] = [
   // ---------------------------------------------------------------- teacher: my work
   { path: "/my/classes", name: "My classes", icon: School, module: "foundation", status: "built", access: { teacher: true }, menu: { teacher: "My work" }, description: "Your sections and the subjects you teach in each." },
   { path: "/my/timetable", name: "My timetable", icon: CalendarClock, module: "timetable", status: "built", access: { teacher: true }, menu: { teacher: "My work" }, description: "Your weekly periods.", teacherDescription: "Your own weekly periods across the sections you teach." },
+  { path: "/my/leave", name: "My leave", icon: CalendarOff, module: "attendance", status: "built", access: { teacher: true }, menu: { teacher: "My work" }, description: "Apply for leave and see your requests.", teacherDescription: "Apply for leave, see the decision and your yearly balance, and your own attendance record." },
   { path: "/my/students", name: "My students", icon: GraduationCap, module: "students", status: "built", access: { teacher: true }, menu: { teacher: "My work" }, description: "Students of your sections.", teacherDescription: "Students of your own sections only: profiles, guardian phone numbers and addresses. No government ID numbers." },
-  { path: "/attendance", name: "Attendance", icon: CalendarCheck, module: "attendance", status: "planned", access: { admin: true, teacher: true }, menu: { admin: "Academics", teacher: "My work" }, description: "Morning and afternoon attendance for every section and date, including corrections and substitute marking.", teacherDescription: "Mark the morning or afternoon session for your own sections, for today only (the session your timetable gives you)." },
+  { path: "/attendance", name: "Attendance", icon: CalendarCheck, module: "attendance", status: "built", access: { admin: true, teacher: true }, menu: { admin: "Academics", teacher: "My work" }, description: "Morning and afternoon attendance for every section and date, including corrections and substitute marking.", teacherDescription: "Mark the morning or afternoon session for your own sections, for today only (the session your timetable gives you)." },
   { path: "/marks", name: "Marks entry", icon: ClipboardPen, module: "exams", status: "planned", access: { teacher: true }, menu: { teacher: "My work" }, description: "Enter marks.", teacherDescription: "Enter marks for the subjects you teach in your own sections, until the Admin locks the exam." },
   { path: "/my/diary-notices", name: "Diary & notices", icon: NotebookPen, module: "notices", status: "planned", access: { teacher: true }, menu: { teacher: "My work" }, description: "Diary and notices.", teacherDescription: "Read the diary for your own sections and the school notices (view only)." },
   { path: "/my/holidays", name: "Holiday list", icon: CalendarDays, module: "foundation", status: "built", access: { admin: true, teacher: true }, menu: { teacher: "My work" }, description: "Holidays of the current academic year." },
@@ -105,7 +107,8 @@ export const PAGES: PageDef[] = [
   { path: "/timetable/teachers", name: "Teacher timetable", icon: CalendarClock, module: "timetable", status: "built", access: { admin: true, duty: "timetable_edit" }, menu: {}, description: "A teacher's whole week across all classes, with print and Excel." },
   { path: "/timetable/substitutions", name: "Substitutions", icon: CalendarClock, module: "timetable", status: "built", access: { admin: true, duty: "timetable_edit" }, menu: {}, description: "Cover an absent teacher's periods with a free teacher, for a date." },
   { path: "/timetable/bell-schedule", name: "Bell schedule", icon: CalendarClock, module: "timetable", status: "built", access: { admin: true, duty: "timetable_edit" }, menu: {}, description: "Period times, breaks and lunch; more than one schedule, assigned per class and weekday." },
-  { path: "/attendance/all-classes", name: "All-class attendance", icon: CalendarCheck, module: "attendance", status: "planned", access: { admin: true, duty: "all_class_attendance" }, menu: { teacher: "Academics" }, description: "Mark or correct attendance for any section, session and date (covers absent teachers; marked as substitute)." },
+    { path: "/attendance/all-classes", name: "All-class attendance", icon: CalendarCheck, module: "attendance", status: "built", access: { admin: true, duty: "all_class_attendance" }, menu: {}, description: "Mark or correct attendance for any section, session and date. This now lives on the Attendance page (older address)." },
+  { path: "/attendance/reports", name: "Attendance reports", icon: CalendarCheck, module: "attendance", status: "built", access: { admin: true, teacher: true }, menu: {}, description: "Daily summary, monthly register with half days and percentages, low-attendance list, Excel and print.", teacherDescription: "Reports for the sections you are class teacher of, and the sessions you marked." },
   { path: "/exams", name: "Exams & marks", icon: BookOpenCheck, module: "exams", status: "planned", access: { admin: true, duty: "all_class_marks" }, menu: { admin: "Academics", teacher: "Academics" }, description: "Exam names, dates, subjects and maximum marks; marks for every class until the Admin locks the exam." },
   { path: "/report-cards", name: "Report cards", icon: ScrollText, module: "exams", status: "planned", access: { admin: true }, menu: { admin: "Academics" }, description: "Generate and publish report cards using the configurable layout and grading scale." },
   { path: "/diary", name: "Diary", icon: NotebookPen, module: "notices", status: "planned", access: { admin: true, duty: "notices_diary" }, menu: { admin: "Academics", teacher: "Academics" }, description: "Add, edit and publish diary entries for sections (deleting is Admin only)." },
@@ -121,8 +124,8 @@ export const PAGES: PageDef[] = [
 
   // ---------------------------------------------------------------- staff
   { path: "/staff", name: "Staff list", icon: Users, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "Staff" }, description: "Staff records, logins and teacher duties." },
-  { path: "/staff/attendance", name: "Staff attendance", icon: UserCheck, module: "attendance", status: "planned", access: { admin: true }, menu: { admin: "Staff" }, description: "Daily staff attendance with in and out times." },
-  { path: "/staff/leave", name: "Leave", icon: FileClock, module: "attendance", status: "planned", access: { admin: true }, menu: { admin: "Staff" }, description: "Staff leave requests, approvals and balances (approval is Admin only)." },
+  { path: "/staff/attendance", name: "Staff attendance", icon: UserCheck, module: "attendance", status: "built", access: { admin: true }, menu: { admin: "Staff" }, description: "Daily staff attendance with in and out times." },
+  { path: "/staff/leave", name: "Leave", icon: FileClock, module: "attendance", status: "built", access: { admin: true }, menu: { admin: "Staff" }, description: "Staff leave requests, approvals and balances (approval is Admin only)." },
 
   // ---------------------------------------------------------------- reports
   { path: "/reports", name: "Reports", icon: BarChart3, module: "reports", status: "planned", access: { admin: true }, menu: { admin: "Reports" }, description: "Attendance %, class strength, fee collection, defaulters and results analysis." },

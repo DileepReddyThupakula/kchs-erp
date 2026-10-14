@@ -44,6 +44,7 @@ export default async function SubstitutionsPage({ searchParams }: { searchParams
   const isSchoolDay = working.includes(weekday) && !hol && !secondSat && inYear;
   const dayNote = hol ? hol.name : secondSat ? "2nd Saturday (holiday)" : !working.includes(weekday) ? "Not a working day" : !inYear ? "Outside the academic year" : null;
 
+  const { data: leaveRows } = isSchoolDay ? await supabase.rpc("approved_leave_periods", { p_date: date }) : { data: [] };
   const names = Object.fromEntries(teachers.map((t) => [t.id, t.name]));
   const labels = Object.fromEntries(sections.map((s) => [s.id, s.label]));
   const dayEntries = entries.filter((e) => e.weekday === weekday);
@@ -80,6 +81,7 @@ export default async function SubstitutionsPage({ searchParams }: { searchParams
         subjectNames={subjects}
         subs={subs}
         times={times}
+        leavePeriods={(leaveRows ?? []).map((l) => ({ staffId: l.staff_id, staff: l.staff_name, type: l.leave_type, sectionId: l.section_id, section: l.section_label, periodNo: l.period_no, covered: l.covered }))}
       />
     </>
   );

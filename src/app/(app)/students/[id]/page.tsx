@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarCheck, ClipboardPen, GraduationCap, Pencil } from "lucide-react";
+import { ClipboardPen, GraduationCap, Pencil } from "lucide-react";
 import { requireStaff } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -12,6 +12,7 @@ import { getStudentConfig, getStudentProfile } from "@/features/students/queries
 import { GROUP_LABEL, maskId, missingGovFields, STATUS_LABEL } from "@/features/students/fields";
 import { DocumentsPanel, RevealIdsButton, SavedToast, StatusButton } from "./client";
 import { StudentFeesPanel } from "./fees-panel";
+import { StudentAttendancePanel } from "./attendance-panel";
 
 export const metadata = { title: "Student" };
 
@@ -24,9 +25,9 @@ function Item({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default async function StudentProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; saved?: string }> }) {
+export default async function StudentProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; saved?: string; month?: string }> }) {
   const { id } = await params;
-  const { tab = "overview", saved } = await searchParams;
+  const { tab = "overview", saved, month } = await searchParams;
   const me = await requireStaff();
   // RLS decides visibility (scope rule). Not visible -> not allowed, no data.
   const p = await getStudentProfile(id);
@@ -234,10 +235,12 @@ export default async function StudentProfilePage({ params, searchParams }: { par
 
       {tab === "fees" && feeAccess && <StudentFeesPanel studentId={s.id} />}
 
-      {(["attendance", "marks"] as const).includes(tab as "attendance") && (
+      {tab === "attendance" && <StudentAttendancePanel studentId={s.id} month={month} />}
+
+      {tab === "marks" && (
         <EmptyState title="Coming soon">
-          {tab === "attendance" && (<><CalendarCheck className="mr-1 inline size-4" />Attendance for this student will appear here with the Attendance module.</>)}
-          {tab === "marks" && (<><ClipboardPen className="mr-1 inline size-4" />Marks and report cards will appear here with the Exams & marks module.</>)}
+          <ClipboardPen className="mr-1 inline size-4" />
+          Marks and report cards will appear here with the Exams & marks module.
         </EmptyState>
       )}
     </>

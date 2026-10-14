@@ -23,6 +23,7 @@ export function SubstitutionsPanel({
   subjectNames,
   subs,
   times,
+  leavePeriods,
 }: {
   date: string;
   weekday: number;
@@ -36,6 +37,8 @@ export function SubstitutionsPanel({
   subs: SubRow[];
   /** period number -> "9:00–9:40" (default schedule) */
   times: Record<number, string>;
+  /** Periods left uncovered by approved leave on this date. */
+  leavePeriods: { staffId: string; staff: string; type: string; sectionId: string; section: string; periodNo: number; covered: boolean }[];
 }) {
   const router = useRouter();
   const [dateInput, setDateInput] = useState(date);
@@ -55,7 +58,10 @@ export function SubstitutionsPanel({
 
   // one round trip for every period shown (free teachers per period)
   const [freeMap, setFreeMap] = useState<Record<string, { id: string; name: string; code: string; load: number }[]> | null>(null);
-  const shown = [...(teacherId ? teacherPeriods : []), ...(sectionId ? sectionPeriods : [])].filter((e) => !covered.has(`${e.sectionId}|${e.periodNo}`));
+  const leaveEntries = leavePeriods
+    .filter((l) => !l.covered && !covered.has(`${l.sectionId}|${l.periodNo}`))
+    .map((l) => ({ l, e: { id: `${l.staffId}-${l.sectionId}-${l.periodNo}`, sectionId: l.sectionId, weekday, periodNo: l.periodNo, subjectId: null, activity: null, teacherId: l.staffId, room: null } as EntryLite }));
+  const shown = [...(teacherId ? teacherPeriods : []), ...(sectionId ? sectionPeriods : []), ...leaveEntries.map((x) => x.e)].filter((e) => !covered.has(`${e.sectionId}|${e.periodNo}`));
   const shownKey = shown.map((e) => `${e.periodNo}|${e.teacherId}`).join(",") + date + subs.length;
   useEffect(() => {
     if (!shown.length) return;
@@ -112,6 +118,31 @@ export function SubstitutionsPanel({
           </p>
         </form>
       </Card>
+
+      {isSchoolDay && leavePeriods.length > 0 && (
+        <Card className="space-y-2 border-gold-200 bg-gold-50/60">
+          <h3 className="font-semibold text-navy-900">Periods affected by approved leave ({leaveEntries.length} still to cover)</h3>
+          {leaveEntries.length === 0 ? (
+            <p className="text-sm text-peacock-700">Every period of the teachers on approved leave is covered.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {leaveEntries.map(({ l, e }) => (
+                <AssignRow
+                  key={e.id}
+                  date={date}
+                  entry={e}
+                  label={`${l.staff} (${l.type} leave) · ${l.section}`}
+                  time={times[e.periodNo]}
+                  covered={false}
+                  free={freeMap ? (freeMap[`${e.periodNo}|${e.teacherId ?? ""}`] ?? []) : null}
+                  reason={reason || `${l.type} leave`}
+                  onDone={() => router.refresh()}
+                />
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
       {!isSchoolDay ? (
         <Card>
