@@ -22,6 +22,8 @@
     "wipe:demo-timetable": "node --env-file-if-exists=.env.local scripts/demo-timetable.mjs wipe",
     "seed:demo-attendance": "node --env-file-if-exists=.env.local scripts/demo-attendance.mjs seed",
     "wipe:demo-attendance": "node --env-file-if-exists=.env.local scripts/demo-attendance.mjs wipe",
+    "seed:demo-notices": "node --env-file-if-exists=.env.local scripts/demo-notices.mjs seed",
+    "wipe:demo-notices": "node --env-file-if-exists=.env.local scripts/demo-notices.mjs wipe",
     "wipe:demo-fees": "node --env-file-if-exists=.env.local scripts/demo-fees.mjs wipe",
     "test:ui": "vitest run",
     "test": "npm run test:db && npm run test:ui"

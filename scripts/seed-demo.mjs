@@ -8,6 +8,7 @@ import { seedDemoStudents } from "./demo-students.mjs";
 import { seedDemoFees } from "./demo-fees.mjs";
 import { seedDemoTimetable } from "./demo-timetable.mjs";
 import { seedDemoAttendance } from "./demo-attendance.mjs";
+import { seedDemoNotices } from "./demo-notices.mjs";
 
 const { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key, DEMO_USER_PASSWORD: password } = process.env;
 for (const [k, v] of Object.entries({ NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key, DEMO_USER_PASSWORD: password })) {
@@ -111,3 +112,6 @@ await seedDemoTimetable();
 
 // ---- demo attendance + leave (skipped until the attendance migration is applied)
 await seedDemoAttendance();
+
+// ---- demo notices + diary (skipped until the notices migration is applied)
+await seedDemoNotices();
