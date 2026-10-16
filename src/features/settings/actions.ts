@@ -37,6 +37,7 @@ const schema = z.object({
   motto: optional,
   admission_no_prefix: z.string().trim(),
   receipt_no_prefix: z.string().trim(),
+  circular_prefix: z.string().trim(),
 });
 
 export async function updateSettings(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -54,7 +55,7 @@ export async function updateSettings(_: ActionState, formData: FormData): Promis
   // Motto lives in the `extra` JSON (no dedicated column yet) — merge, don't overwrite.
   const { data: current } = await supabase.from("school_settings").select("extra").eq("id", 1).single();
   const extra = { ...((current?.extra as Record<string, unknown> | null) ?? {}), motto };
-  const { error } = await supabase.from("school_settings").update({ ...columns, extra }).eq("id", 1);
+  const { error } = await supabase.from("school_settings").update({ ...columns, circular_prefix: columns.circular_prefix || null, extra }).eq("id", 1);
   if (error) return { error: friendlyDbError(error) };
   revalidatePath("/", "layout");
   return { ok: true, message: "Settings saved." };

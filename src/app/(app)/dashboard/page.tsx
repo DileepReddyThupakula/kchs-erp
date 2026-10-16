@@ -25,6 +25,7 @@ import { formatDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { TodayStrip } from "@/components/timetable/today-strip";
 import { AttendanceDashboard } from "@/components/attendance/dashboard-card";
+import { NoticesDashboard } from "@/components/notices/dashboard-cards";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard" };
@@ -120,6 +121,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </p>
       )}
 
+      <NoticesDashboard me={me} />
       {me.role === "teacher" && <TodayStrip />}
       <AttendanceDashboard me={me} />
 

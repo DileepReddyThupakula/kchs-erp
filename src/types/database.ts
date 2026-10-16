@@ -76,6 +76,7 @@ export type SchoolSettings = Stamps & {
   mediums: string[];
   working_days: number[];
   low_attendance_pct: number;
+  circular_prefix: string | null;
   second_saturday_holiday: boolean;
   periods_per_day: number;
   admission_no_prefix: string;
@@ -436,6 +437,44 @@ export type StaffAttendanceRow = Stamps & {
   is_demo: boolean;
 };
 
+export type DiaryEntry = Stamps & {
+  id: string;
+  academic_year_id: string;
+  entry_date: string;
+  subject_id: string | null;
+  body: string;
+  status: "draft" | "published";
+  published_at: string | null;
+  published_by: string | null;
+  archived_at: string | null;
+  archived_by: string | null;
+  is_demo: boolean;
+};
+export type DiaryEntrySection = { entry_id: string; section_id: string };
+export type FileMeta = Stamps & { id: string; file_path: string; file_name: string; mime_type: string; size_bytes: number };
+export type DiaryAttachment = FileMeta & { entry_id: string };
+export type NoticeRow = Stamps & {
+  id: string;
+  academic_year_id: string;
+  circular_seq: number | null;
+  circular_no: string | null;
+  title: string;
+  body: string;
+  audience: "all" | "roles" | "classes" | "teachers";
+  publish_date: string;
+  expires_on: string | null;
+  important: boolean;
+  status: "draft" | "published";
+  published_at: string | null;
+  published_by: string | null;
+  archived_at: string | null;
+  archived_by: string | null;
+  is_demo: boolean;
+};
+export type NoticeAudienceRow = { id: string; notice_id: string; role: AppRole | null; class_id: string | null; staff_id: string | null };
+export type NoticeAttachment = FileMeta & { notice_id: string };
+export type NoticeRead = { notice_id: string; staff_id: string; read_at: string };
+
 export type Database = {
   __InternalSupabase: { PostgrestVersion: "14.18" };
   public: {
@@ -533,6 +572,13 @@ export type Database = {
         ]
       >;
       student_documents: T<StudentDocument, "student_id" | "doc_type" | "file_path" | "file_name" | "mime_type" | "size_bytes", [FK<"student_documents_student_id_fkey", "student_id", "students">]>;
+      diary_entries: T<DiaryEntry, "academic_year_id" | "entry_date" | "body">;
+      diary_entry_sections: T<DiaryEntrySection, "entry_id" | "section_id">;
+      diary_attachments: T<DiaryAttachment, "entry_id" | "file_path" | "file_name" | "mime_type" | "size_bytes">;
+      notices: T<NoticeRow, "academic_year_id" | "title" | "body" | "audience">;
+      notice_audience: T<NoticeAudienceRow, "notice_id">;
+      notice_attachments: T<NoticeAttachment, "notice_id" | "file_path" | "file_name" | "mime_type" | "size_bytes">;
+      notice_reads: T<NoticeRead, "notice_id" | "staff_id">;
       attendance_sessions: T<AttendanceSession, "academic_year_id" | "section_id" | "att_date" | "session" | "kind">;
       student_attendance: T<StudentAttendanceRow, "session_id" | "student_id" | "status">;
       leave_types: T<LeaveType, "name">;
@@ -585,6 +631,20 @@ export type Database = {
         Args: { p_fee_head_id: string; p_amount_paise: number; p_mode: string; p_reference?: string; p_student_id?: string; p_payer_name?: string; p_notes?: string; p_receipt_date?: string };
         Returns: string;
       };
+      subject_names: { Args: never; Returns: { id: string; name: string }[] };
+      save_diary: { Args: { p: Json }; Returns: string };
+      save_diary_day: { Args: { p_date: string; p_section_ids: string[]; p_items: Json; p_publish?: boolean }; Returns: string[] };
+      set_diary_status: { Args: { p_id: string; p_status: string }; Returns: undefined };
+      archive_diary: { Args: { p_id: string; p_archive: boolean }; Returns: undefined };
+      save_notice: { Args: { p: Json }; Returns: string };
+      publish_notice: { Args: { p_id: string }; Returns: string };
+      archive_notice: { Args: { p_id: string; p_archive: boolean }; Returns: undefined };
+      mark_notice_read: { Args: { p_id: string }; Returns: undefined };
+      notice_readers: { Args: { p_notice: string }; Returns: { staff_id: string; full_name: string; designation: string | null; read_at: string | null }[] };
+      my_unread_notices: { Args: never; Returns: number };
+      add_diary_attachment: { Args: { p_entry: string; p_path: string; p_name: string; p_mime: string; p_size: number }; Returns: string };
+      add_notice_attachment: { Args: { p_notice: string; p_path: string; p_name: string; p_mime: string; p_size: number }; Returns: string };
+      remove_attachment: { Args: { p_kind: string; p_id: string }; Returns: string };
       session_markers: {
         Args: { p_section: string; p_date: string };
         Returns: { session: string; period_no: number; staff_id: string | null; source: string }[];

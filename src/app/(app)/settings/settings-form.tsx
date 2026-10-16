@@ -78,6 +78,7 @@ export function SettingsForm({ settings: s, editable }: { settings: SchoolSettin
         <h2 className="font-medium sm:col-span-2">Numbering</h2>
         {text("admission_no_prefix", "Admission number prefix")}
         {text("receipt_no_prefix", "Fee receipt prefix")}
+        {text("circular_prefix", "Circular number prefix", "Circulars are numbered PREFIX/2026-27/001. Empty = the school short name.")}
       </Card>
       {editable && (
         <div className="flex items-center gap-3">
