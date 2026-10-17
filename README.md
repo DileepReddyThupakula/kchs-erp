@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# KCHS ERP
 
-## Getting Started
+School ERP for **Krishna Chaitanya High School**, Yerraguntla (YSR Kadapa, Andhra Pradesh; AP State Board; Nursery to Class 10).
+A Next.js 15 web app (installable as a PWA) on a Supabase (Postgres) database.
 
-First, run the development server:
+- **Staff logins only:** Admin and Teachers (with extra duties the Admin grants). Students and parents are data records, **not** users: there are no parent logins.
+- **Modules built so far:** students, fees, timetable, attendance and leave, notices and diary (English and Telugu), exams and marks with report cards, plus performance and security work.
+- Every rule about who may see what is enforced in the database (row-level security), then again in the app. Decisions are recorded in [DECISIONS.md](DECISIONS.md).
+
+## Set up
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local     # then fill in the values (see below)
+npm run dev                    # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`.env.local` (never committed) needs, from the Supabase dashboard:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Where it comes from |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Project Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API (**server only**, never in browser code) |
+| `DATABASE_URL` | Connect → Session pooler (includes the database password) |
+| `DEMO_USER_PASSWORD` | any password; given to the demo logins |
+| `GEMINI_API_KEY` | Google AI Studio (optional: automatic Telugu translation, server only) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Database changes are the files in `supabase/migrations/`; apply one with `npm run db:apply -- <file>`. Use the **development** project for all of this.
 
-## Learn More
+## Demo data (all dummy, wipeable)
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run seed:demo           # staff logins, sections, subjects
+npm run seed:demo-students  # ~60 dummy students
+npm run seed:demo-bulk      # top up to 439 students (the school's real strength)
+npm run seed:demo-exams     # exams and marks for Classes 6 to 10
+```
+Each has a matching `wipe:` script that removes only the demo rows.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Tests
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm test                    # database + API tests, then UI tests
+TEST_TODAY=2026-10-17 npm test   # pretend "today" is a Saturday (also try ...-18 Sunday, ...-19 Monday)
+npm run test:db -- <part of a file name>   # a subset
+```
+Database tests run inside transactions that are always rolled back. API tests sign in as the demo users. Run the suite on a Saturday, a Sunday and a Monday clock before finishing a module.
 
-## Deploy on Vercel
+## Real student data must never be committed
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Never put real student or parent data (names, admission numbers, Aadhaar or other IDs, phones, addresses, photos, marks, fee records), exports of it, or any key or password into this repository. The demo data is generated and flagged `is_demo`. Real data goes in only through the app, after a security review, and only into the production database. `.env.local`, spreadsheets, CSV and PDF files are git-ignored on purpose; do not force-add them.
