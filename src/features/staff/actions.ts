@@ -33,6 +33,22 @@ const staffSchema = z.object({
   status: z.enum(["active", "inactive", "left"]).default("active"),
 });
 
+/**
+ * Belt and braces on top of the database (which already refuses a deactivated / role-less person on every
+ * query): also stop their Auth login from getting NEW tokens. Banned = refresh tokens stop working, so the
+ * session ends when the current access token (max 1 hour) expires. The ban is lifted when they are active again.
+ */
+async function syncLoginBan(staffId: string, blocked: boolean) {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.from("staff").select("user_id").eq("id", staffId).maybeSingle();
+    if (!data?.user_id) return;
+    await createAdminClient().auth.admin.updateUserById(data.user_id, { ban_duration: blocked ? "876000h" : "none" });
+  } catch {
+    // the database already refuses them; a failed ban must not fail the save
+  }
+}
+
 export async function saveStaff(_: ActionState, fd: FormData): Promise<ActionState> {
   await requireCapability("staff.edit");
   const parsed = staffSchema.safeParse(Object.fromEntries(fd));
@@ -42,6 +58,7 @@ export async function saveStaff(_: ActionState, fd: FormData): Promise<ActionSta
   if (id) {
     const { error } = await supabase.from("staff").update(parsed.data).eq("id", id);
     if (error) return { error: error.code === "23505" ? "Another staff member has this employee code." : friendlyDbError(error) };
+    await syncLoginBan(id, parsed.data.status !== "active");
     revalidatePath("/staff", "layout");
     return { ok: true, message: "Saved." };
   }
@@ -96,6 +113,7 @@ export async function changeRole(_: ActionState, fd: FormData): Promise<ActionSt
   const supabase = await createClient();
   const { error } = await supabase.from("staff").update({ app_role }).eq("id", staff_id);
   if (error) return { error: friendlyDbError(error) };
+  await syncLoginBan(staff_id, app_role === null);
   revalidatePath("/staff", "layout");
   return { ok: true, message: app_role ? "Role updated." : "Access revoked. The login can no longer open the ERP." };
 }

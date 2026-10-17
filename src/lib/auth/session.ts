@@ -17,22 +17,22 @@ export type CurrentStaff = {
 /** The signed-in staff member, or null if not signed in / no active role. */
 export const getCurrentStaff = cache(async (): Promise<CurrentStaff | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  // the token's signature is verified locally (no network); the database checks the person on every query
+  const { data: auth } = await supabase.auth.getClaims();
+  const claims = auth?.claims;
+  if (!claims?.sub) return null;
+  const userId = claims.sub;
 
-  const { data: staff } = await supabase
-    .from("staff")
-    .select("id, full_name, app_role, status")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  // the staff row and the duties are independent: ask for both at once
+  const [{ data: staff }, { data: duties }] = await Promise.all([
+    supabase.from("staff").select("id, full_name, app_role, status").eq("user_id", userId).maybeSingle(),
+    supabase.rpc("my_duties"),
+  ]);
   if (!staff || staff.status !== "active" || !staff.app_role) return null;
-  const { data: duties } = await supabase.rpc("my_duties");
 
   return {
-    userId: user.id,
-    email: user.email,
+    userId,
+    email: typeof claims.email === "string" ? claims.email : undefined,
     staffId: staff.id,
     fullName: staff.full_name,
     role: staff.app_role,

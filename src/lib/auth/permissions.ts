@@ -54,6 +54,7 @@ const ADMIN_ONLY = [
   "fees.setup",
   "fees.cancelReceipt",
   "exams.lock",
+  "exams.scheme",
   "records.delete",
   "audit.view",
   "students.govExport",
