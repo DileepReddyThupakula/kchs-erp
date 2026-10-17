@@ -1,19 +1,19 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowRightLeft, FileSpreadsheet, FileText, Loader2, RefreshCcw } from "lucide-react";
 import type { RowAction } from "@/components/data-table/data-table";
 import { StatusDialog } from "./[id]/client";
-import { DataTable, type Column, type FilterDef } from "@/components/data-table/data-table";
+import { DataTable, type Column, type FilterDef, type ServerTable } from "@/components/data-table/data-table";
 import { Modal } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge, StatusChip } from "@/components/ui/card";
 import { Select } from "@/components/ui/form";
 import { exportSheets, type ExportCell, type ExportFormat } from "@/lib/export";
 import { logExport } from "@/features/audit/actions";
-import { changeStudentsSection } from "@/features/students/actions";
+import { changeStudentsSection, studentsForExport } from "@/features/students/actions";
 import { GROUP_LABEL, maskId, STATUS_LABEL } from "@/features/students/fields";
 import type { StudentRow, SectionOption } from "@/features/students/queries";
 import type { StudentFieldDefinition } from "@/types/database";
@@ -31,10 +31,17 @@ function Avatar({ name }: { name: string }) {
 
 const classLabel = (r: StudentRow) => (r.className ? `${r.className} – ${r.section}` : "Not enrolled");
 const father = (r: StudentRow) => r.guardians.find((g) => g.relation === "father");
+const docsMissing = (r: StudentRow) => r.missingDocsCount ?? r.missingDocs?.length ?? 0;
+const govMissing = (r: StudentRow) => r.missingGovCount ?? r.missingGov?.length ?? 0;
 const mother = (r: StudentRow) => r.guardians.find((g) => g.relation === "mother");
+
+/** Search / filter / sort / page state lives in the URL (so it survives a reload and can be shared). */
+export const STUDENT_FILTER_KEYS = ["class", "section", "status", "docs", "gov", "enrol"] as const;
+const PAGE_SIZES = [25, 50, 100, 250];
 
 export function StudentsTable({
   rows,
+  total,
   mode,
   sections,
   definitions = [],
@@ -44,7 +51,10 @@ export function StudentsTable({
   canChangeStatus = false,
   initialSection,
 }: {
+  /** ONE page of students (the database did the searching, filtering, sorting and paging). */
   rows: StudentRow[];
+  /** How many students match the search and filters in all. */
+  total: number;
   /** manage = Admin / student_records (all students); mine = own sections only */
   mode: "manage" | "mine";
   sections: SectionOption[];
@@ -55,10 +65,14 @@ export function StudentsTable({
   canEdit?: boolean;
   /** Admin only. */
   canChangeStatus?: boolean;
-  /** Pre-select a section filter (e.g. coming from My classes). */
+  /** Kept for callers; a section chosen in the URL (?section=) is applied by the page. */
   initialSection?: string;
 }) {
   const manage = mode === "manage";
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const [pending, startTransition] = useTransition();
   const [exportRows, setExportRows] = useState<{ rows: StudentRow[]; info: Record<string, unknown> } | null>(null);
   const [moveRows, setMoveRows] = useState<{ rows: StudentRow[]; clear: () => void } | null>(null);
   const [statusFor, setStatusFor] = useState<StudentRow | null>(null);
@@ -103,15 +117,15 @@ export function StudentsTable({
       {
         id: "docs",
         header: "Documents",
-        cell: (r) => (r.missingDocs?.length ? <Badge tone="warning">{r.missingDocs.length} missing</Badge> : <Badge tone="success">Complete</Badge>),
-        sortValue: (r) => r.missingDocs?.length ?? 0,
+        cell: (r) => (docsMissing(r) ? <Badge tone="warning">{docsMissing(r)} missing</Badge> : <Badge tone="success">Complete</Badge>),
+        sortValue: (r) => docsMissing(r),
         exportValue: (r) => r.missingDocs?.join(", ") || "Complete",
       },
       {
         id: "gov",
         header: "Govt. fields",
-        cell: (r) => (r.missingGov?.length ? <Badge tone="warning">{r.missingGov.length} missing</Badge> : <Badge tone="success">Complete</Badge>),
-        sortValue: (r) => r.missingGov?.length ?? 0,
+        cell: (r) => (govMissing(r) ? <Badge tone="warning">{govMissing(r)} missing</Badge> : <Badge tone="success">Complete</Badge>),
+        sortValue: (r) => govMissing(r),
         exportValue: (r) => r.missingGov?.join(", ") || "Complete",
       },
       { id: "aadhaar", header: "Aadhaar", cell: (r) => <span className="font-mono text-xs">{maskId(r.masked?.aadhaar_no) || "—"}</span>, exportValue: (r) => maskId(r.masked?.aadhaar_no), defaultHidden: true },
@@ -119,16 +133,89 @@ export function StudentsTable({
   }
 
   const filters: FilterDef<StudentRow>[] = [
-    { id: "class", label: "Class", options: classes.map((c) => ({ value: c.id, label: c.name })), match: (r, v) => r.classId === v },
-    { id: "section", label: "Section", options: sections.map((s) => ({ value: s.id, label: s.label })), match: (r, v) => r.sectionId === v },
+    { id: "class", label: "Class", options: classes.map((c) => ({ value: c.id, label: c.name })) },
+    { id: "section", label: "Section", options: sections.map((s) => ({ value: s.id, label: s.label })) },
   ];
   if (manage) {
     filters.push(
-      { id: "status", label: "Status", options: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })), match: (r, v) => r.status === v },
-      { id: "docs", label: "Documents", options: [{ value: "missing", label: "Missing documents" }, { value: "complete", label: "Complete" }], match: (r, v) => (v === "missing") === !!r.missingDocs?.length },
-      { id: "gov", label: "Govt. fields", options: [{ value: "missing", label: "Missing required fields" }, { value: "complete", label: "Complete" }], match: (r, v) => (v === "missing") === !!r.missingGov?.length },
-      { id: "enrol", label: "Enrolment", options: [{ value: "none", label: `Not enrolled in ${yearName}` }], match: (r) => !r.sectionId },
+      { id: "status", label: "Status", options: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })) },
+      { id: "docs", label: "Documents", options: [{ value: "missing", label: "Missing documents" }, { value: "complete", label: "Complete" }] },
+      { id: "gov", label: "Govt. fields", options: [{ value: "missing", label: "Missing required fields" }, { value: "complete", label: "Complete" }] },
+      { id: "enrol", label: "Enrolment", options: [{ value: "none", label: `Not enrolled in ${yearName}` }] },
     );
+  }
+
+  // ---- server-side table state, kept in the URL
+  const current = {
+    q: sp.get("q") ?? "",
+    filters: Object.fromEntries(
+      STUDENT_FILTER_KEYS.filter((k) => manage || k === "class" || k === "section").map((k) => {
+        const v = sp.get(k) ?? (k === "status" ? "active" : "");
+        return [k, k === "status" && v === "all" ? "" : v];
+      }),
+    ) as Record<string, string>,
+    sortId: sp.get("sort") ?? "name",
+    dir: (sp.get("dir") === "desc" ? "desc" : "asc") as "asc" | "desc",
+    page: Math.max(0, (Number(sp.get("page")) || 1) - 1),
+    size: PAGE_SIZES.includes(Number(sp.get("size"))) ? Number(sp.get("size")) : 25,
+  };
+  const push = useCallback(
+    (change: { page?: number; pageSize?: number; query?: string; filters?: Record<string, string>; sort?: { id: string; dir: "asc" | "desc" } | null }) => {
+      const u = new URLSearchParams(sp.toString());
+      if (change.query !== undefined) change.query ? u.set("q", change.query) : u.delete("q");
+      if (change.filters) {
+        for (const k of STUDENT_FILTER_KEYS) {
+          if (!manage && k !== "class" && k !== "section") continue;
+          const v = change.filters[k] ?? ""; // a filter left out (e.g. "Clear all") is cleared
+          if (k === "status") v ? (v === "active" ? u.delete("status") : u.set("status", v)) : u.set("status", "all");
+          else v ? u.set(k, v) : u.delete(k);
+        }
+      }
+      if (change.sort !== undefined) {
+        if (change.sort && !(change.sort.id === "name" && change.sort.dir === "asc")) {
+          u.set("sort", change.sort.id);
+          u.set("dir", change.sort.dir);
+        } else {
+          u.delete("sort");
+          u.delete("dir");
+        }
+      }
+      if (change.pageSize !== undefined) change.pageSize === 25 ? u.delete("size") : u.set("size", String(change.pageSize));
+      if (change.page !== undefined) change.page > 0 ? u.set("page", String(change.page + 1)) : u.delete("page");
+      const qs = u.toString();
+      startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+    },
+    [sp, pathname, router],
+  );
+  const server: ServerTable = {
+    total,
+    page: current.page,
+    pageSize: current.size,
+    query: current.q,
+    filters: current.filters,
+    sort: { id: current.sortId === "adm" ? "adm" : current.sortId, dir: current.dir },
+    sortable: ["name", "adm", "class", "dob", "status"],
+    pending,
+    onChange: push,
+  };
+  /** The same search and filters, as the database function takes them (for "export everything that matches"). */
+  const exportParams = {
+    q: current.q || undefined,
+    classId: current.filters.class || undefined,
+    sectionId: current.filters.section || undefined,
+    status: manage ? current.filters.status || undefined : undefined,
+    docs: current.filters.docs || undefined,
+    gov: current.filters.gov || undefined,
+    enrol: current.filters.enrol || undefined,
+    sort: current.sortId,
+    dir: current.dir,
+  };
+  async function openExport(selected: StudentRow[], info: { selectedOnly: boolean }) {
+    const t = toast.loading(info.selectedOnly ? "Collecting the selected students…" : "Collecting every matching student…");
+    const r = await studentsForExport(info.selectedOnly ? { ids: selected.map((x) => x.id) } : exportParams, manage ? "all" : "mine");
+    toast.dismiss(t);
+    if (r.error || !r.rows) return toast.error(r.error ?? "Could not collect the students.");
+    setExportRows({ rows: r.rows, info: info.selectedOnly ? { selectedOnly: true } : { filteredAll: true, search: current.q || undefined, filters: current.filters } });
   }
 
   return (
@@ -141,11 +228,10 @@ export function StudentsTable({
         rows={rows}
         columns={columns}
         getRowId={(r) => r.id}
-        searchText={(r) => `${r.full_name} ${r.admission_no} ${r.guardians.map((g) => `${g.name} ${g.phone ?? ""}`).join(" ")}`}
-        searchPlaceholder="Search name, admission no, phone…"
+        searchText={() => ""}
+        searchPlaceholder="Search name, admission no, parent, phone…"
         filters={filters}
-        initialFilters={{ ...(manage ? { status: "active" } : {}), ...(initialSection ? { section: initialSection } : {}) }}
-        pageSize={50}
+        server={server}
         selectable
         bulkActions={(sel, clear) => (
           <>
@@ -154,12 +240,12 @@ export function StudentsTable({
                 <ArrowRightLeft className="size-3.5" /> Change section
               </Button>
             )}
-            <Button size="sm" variant="secondary" onClick={() => setExportRows({ rows: sel, info: { selectedOnly: true } })}>
+            <Button size="sm" variant="secondary" onClick={() => void openExport(sel, { selectedOnly: true })}>
               <FileSpreadsheet className="size-3.5" /> Export selected
             </Button>
           </>
         )}
-        customExport={(r, info) => setExportRows({ rows: r, info })}
+        customExport={(r, info) => void openExport(r, info)}
         emptyTitle={manage ? "No students yet" : "No students in your sections"}
         emptyMessage={manage ? "Add students one by one, or import them from Excel." : "Students appear here once they're enrolled in the sections you teach."}
         toolbar={toolbar}

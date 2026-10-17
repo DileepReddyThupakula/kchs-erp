@@ -6,8 +6,7 @@ import { RoleBadge } from "@/components/ui/card";
 import { signOut } from "@/features/auth/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const me = await requireStaff();
-  const brand = await getBranding();
+  const [me, brand] = await Promise.all([requireStaff(), getBranding()]);
 
   return (
     <div className="lg:flex">

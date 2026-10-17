@@ -77,3 +77,83 @@ describe("DataTable stability", () => {
     expect(screen.queryByText("1 selected")).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------- server-side mode (the Students list)
+import type { ServerTable } from "@/components/data-table/data-table";
+import { act } from "@testing-library/react";
+
+describe("DataTable server mode", () => {
+  const PAGE = Array.from({ length: 50 }, (_, i) => ({ id: `p${i}`, name: `Page row ${i}`, n: i }));
+  const cols: Column<Row>[] = [
+    { id: "name", header: "Name", cell: (r) => r.name, sortValue: (r) => r.name },
+    { id: "n", header: "N", cell: (r) => r.n, sortValue: (r) => r.n },
+  ];
+  const base = (over: Partial<ServerTable> = {}): ServerTable => ({ total: 439, page: 1, pageSize: 50, query: "", filters: {}, sort: null, sortable: ["name"], onChange: vi.fn(), ...over });
+  const show = (server: ServerTable) =>
+    render(<DataTable id="srv" rows={PAGE} columns={cols} getRowId={(r) => r.id} searchText={() => ""} filters={[{ id: "cls", label: "Class", options: [{ value: "a", label: "Class A" }] }]} server={server} />);
+
+  it("shows only the rows it is given and the true total", () => {
+    show(base());
+    expect(screen.getAllByText(/^Page row/).length).toBe(50);
+    expect(screen.getByText("51–100 of 439 records")).toBeTruthy();
+    expect(screen.getByText("2 / 9")).toBeTruthy();
+  });
+
+  it("paging asks the server for the next / previous page (it does not slice locally)", () => {
+    const server = base();
+    show(server);
+    fireEvent.click(screen.getByLabelText("Next page"));
+    expect(server.onChange).toHaveBeenLastCalledWith({ page: 2 });
+    fireEvent.click(screen.getByLabelText("Previous page"));
+    expect(server.onChange).toHaveBeenLastCalledWith({ page: 0 });
+  });
+
+  it("the last page disables Next, the first page disables Previous", () => {
+    show(base({ page: 8, total: 439 }));
+    expect((screen.getByLabelText("Next page") as HTMLButtonElement).disabled).toBe(true);
+    cleanup();
+    show(base({ page: 0 }));
+    expect((screen.getByLabelText("Previous page") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("choosing a filter goes to the server and returns to page 1", () => {
+    const server = base();
+    show(server);
+    fireEvent.click(screen.getByText("Class"));
+    fireEvent.click(screen.getByText("Class A"));
+    expect(server.onChange).toHaveBeenLastCalledWith({ filters: { cls: "a" }, page: 0 });
+  });
+
+  it("typing in the search box is sent to the server after a short pause, once", () => {
+    vi.useFakeTimers();
+    try {
+      const server = base();
+      show(server);
+      const box = screen.getByPlaceholderText("Search…");
+      fireEvent.change(box, { target: { value: "ra" } });
+      fireEvent.change(box, { target: { value: "ravi" } });
+      expect(server.onChange).not.toHaveBeenCalled();
+      act(() => void vi.advanceTimersByTime(400));
+      expect(server.onChange).toHaveBeenCalledTimes(1);
+      expect(server.onChange).toHaveBeenCalledWith({ query: "ravi", page: 0 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("only the columns the server can sort are sortable, and sorting is sent to the server", () => {
+    const server = base();
+    show(server);
+    expect(screen.queryByRole("button", { name: "N" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Name" }));
+    expect(server.onChange).toHaveBeenLastCalledWith({ sort: { id: "name", dir: "asc" }, page: 0 });
+  });
+
+  it("an empty page with a search says 'No matches', an empty list says the empty message", () => {
+    render(<DataTable id="e1" rows={[]} columns={cols} getRowId={(r) => r.id} searchText={() => ""} server={base({ total: 0, page: 0, query: "zzz" })} emptyTitle="Nothing yet" />);
+    expect(screen.getByText("No matches")).toBeTruthy();
+    cleanup();
+    render(<DataTable id="e2" rows={[]} columns={cols} getRowId={(r) => r.id} searchText={() => ""} server={base({ total: 0, page: 0 })} emptyTitle="Nothing yet" />);
+    expect(screen.getByText("Nothing yet")).toBeTruthy();
+  });
+});

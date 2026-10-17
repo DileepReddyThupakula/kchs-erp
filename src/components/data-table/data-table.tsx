@@ -47,7 +47,24 @@ export type FilterDef<T> = {
   id: string;
   label: string;
   options: { value: string; label: string }[];
-  match: (row: T, value: string) => boolean;
+  /** Client-side tables only; a server-side table lets the database filter. */
+  match?: (row: T, value: string) => boolean;
+};
+
+/** Server-side mode: the rows are ONE page; search, filters, sort and paging go back to the server (usually via the URL). */
+export type ServerTable = {
+  total: number;
+  /** 0-based */
+  page: number;
+  pageSize: number;
+  query: string;
+  filters: Record<string, string>;
+  sort: { id: string; dir: "asc" | "desc" } | null;
+  /** Column ids the server can sort by. */
+  sortable: string[];
+  /** A new page is on its way. */
+  pending?: boolean;
+  onChange: (next: { page?: number; pageSize?: number; query?: string; filters?: Record<string, string>; sort?: { id: string; dir: "asc" | "desc" } | null }) => void;
 };
 
 type SortState = { id: string; dir: "asc" | "desc" } | null;
@@ -130,6 +147,7 @@ export function DataTable<T>({
   rowHref,
   onRowClick,
   rowLabel,
+  server,
 }: {
   /** Stable id: remembers column visibility per table. */
   id: string;
@@ -161,6 +179,7 @@ export function DataTable<T>({
   onRowClick?: (row: T) => void;
   /** Screen-reader name of a row, used in action labels (e.g. the student's name). */
   rowLabel?: (row: T) => string;
+  server?: ServerTable;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState<RowAction | null>(null);
@@ -172,11 +191,37 @@ export function DataTable<T>({
   };
   const clickable = !!(rowHref || onRowClick);
   const openRow = (r: T) => (rowHref ? router.push(rowHref(r)) : onRowClick?.(r));
-  const [query, setQuery] = useState("");
-  const [active, setActive] = useState<Record<string, string>>(initialFilters);
-  const [sort, setSort] = useState<SortState>(null);
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(initialPageSize);
+  const [localQuery, setLocalQuery] = useState(server?.query ?? "");
+  const [localActive, setLocalActive] = useState<Record<string, string>>(initialFilters);
+  const [localSort, setLocalSort] = useState<SortState>(null);
+  const [localPage, setLocalPage] = useState(0);
+  const [localPageSize, setLocalPageSize] = useState(initialPageSize);
+  // in server mode the URL (via `server`) holds all of these; the typed search box is debounced into it
+  const query = localQuery;
+  const setQuery = setLocalQuery;
+  const active = server ? server.filters : localActive;
+  const setActive = (f: Record<string, string> | ((a: Record<string, string>) => Record<string, string>)) => {
+    const next = typeof f === "function" ? f(active) : f;
+    if (server) server.onChange({ filters: next, page: 0 });
+    else setLocalActive(next);
+  };
+  const sort: SortState = server ? server.sort : localSort;
+  const page = server ? server.page : localPage;
+  const setPage = (f: number | ((p: number) => number)) => {
+    const next = typeof f === "function" ? f(page) : f;
+    if (server) server.onChange({ page: next });
+    else setLocalPage(next);
+  };
+  const pageSize = server ? server.pageSize : localPageSize;
+  const setPageSize = (n: number) => (server ? server.onChange({ pageSize: n, page: 0 }) : setLocalPageSize(n));
+  const serverQuery = server?.query;
+  const serverOnChange = server?.onChange;
+  useEffect(() => {
+    if (!serverOnChange) return;
+    if (localQuery.trim() === (serverQuery ?? "").trim()) return;
+    const t = setTimeout(() => serverOnChange({ query: localQuery.trim(), page: 0 }), 350);
+    return () => clearTimeout(t);
+  }, [localQuery, serverQuery, serverOnChange]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
   const storageKey = `dt-cols:${id}`;
@@ -208,11 +253,12 @@ export function DataTable<T>({
   const pinCls = (id: string) => (id === pinnedId ? cn("sticky", selectable ? "left-10" : "left-0", edge) : "");
 
   const filtered = useMemo(() => {
+    if (server) return rows; // the database already searched, filtered and sorted this page
     const q = query.trim().toLowerCase();
     let out = rows.filter((r) =>
       Object.entries(active).every(([fid, v]) => {
         const f = filters.find((x) => x.id === fid);
-        return !f || !v || f.match(r, v);
+        return !f || !v || !f.match || f.match(r, v);
       }),
     );
     if (q && searchText) out = out.filter((r) => searchText(r).toLowerCase().includes(q));
@@ -232,10 +278,12 @@ export function DataTable<T>({
       }
     }
     return out;
-  }, [rows, active, filters, query, searchText, sort, columns]);
+  }, [server, rows, active, filters, query, searchText, sort, columns]);
 
   // Reset paging / prune selection when the visible set changes.
-  useEffect(() => setPage(0), [query, active, pageSize]);
+  useEffect(() => {
+    if (!server) setLocalPage(0);
+  }, [server, query, active, pageSize]);
   // A primitive key: it only changes when the SET of visible rows changes, not
   // when the caller rebuilds `rows`, `columns` or an inline `getRowId`.
   const idKey = filtered.map((r) => getRowId(r)).join("\u0001");
@@ -250,13 +298,18 @@ export function DataTable<T>({
     });
   }, [idKey]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageRows = filtered.slice(page * pageSize, page * pageSize + pageSize);
+  const totalCount = server ? server.total : filtered.length;
+  const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
+  const pageRows = server ? filtered : filtered.slice(page * pageSize, page * pageSize + pageSize);
   const selectedRows = filtered.filter((r) => selected.has(getRowId(r)));
   const allOnPage = pageRows.length > 0 && pageRows.every((r) => selected.has(getRowId(r)));
 
-  const cycleSort = (cid: string) =>
-    setSort((s) => (s?.id !== cid ? { id: cid, dir: "asc" } : s.dir === "asc" ? { id: cid, dir: "desc" } : null));
+  const cycleSort = (cid: string) => {
+    const next: SortState = sort?.id !== cid ? { id: cid, dir: "asc" } : sort.dir === "asc" ? { id: cid, dir: "desc" } : null;
+    if (server) server.onChange({ sort: next, page: 0 });
+    else setLocalSort(next);
+  };
+  const sortableCol = (c: Column<T>) => (server ? server.sortable.includes(c.id) : !!c.sortValue);
 
   async function doExport(format: ExportFormat) {
     if (!exportName) return;
@@ -283,7 +336,7 @@ export function DataTable<T>({
   const activeChips = Object.entries(active).filter(([, v]) => v);
 
   return (
-    <div className="space-y-3">
+    <div className={cn("space-y-3", server?.pending && "opacity-70 transition-opacity")} aria-busy={server?.pending || undefined}>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         {searchText && (
@@ -448,9 +501,14 @@ export function DataTable<T>({
       {loading ? (
         <TableSkeleton columns={visible.length} />
       ) : filtered.length === 0 ? (
-        <EmptyState title={rows.length ? "No matches" : emptyTitle} action={rows.length ? undefined : emptyAction}>
-          {rows.length ? "Nothing matches your search or filters. Try clearing them." : emptyMessage}
-        </EmptyState>
+        (() => {
+          const narrowed = server ? !!(server.query || Object.values(server.filters).some(Boolean)) : rows.length > 0;
+          return (
+            <EmptyState title={narrowed ? "No matches" : emptyTitle} action={narrowed ? undefined : emptyAction}>
+              {narrowed ? "Nothing matches your search or filters. Try clearing them." : emptyMessage}
+            </EmptyState>
+          );
+        })()
       ) : (
         <div className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-soft)]">
           <div className="max-h-[70vh] overflow-auto">
@@ -486,7 +544,7 @@ export function DataTable<T>({
                         c.id === pinnedId && cn(pinCls(c.id), "z-[2] bg-cream-100"),
                       )}
                     >
-                      {c.sortValue ? (
+                      {sortableCol(c) ? (
                         <button type="button" onClick={() => cycleSort(c.id)} className="inline-flex items-center gap-1 uppercase hover:text-navy-900">
                           {c.header}
                           {sort?.id === c.id ? (
@@ -580,7 +638,13 @@ export function DataTable<T>({
           {/* Pagination */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-cream-50 px-3 py-2 text-xs text-muted">
             <span>
-              {filtered.length === rows.length ? `${rows.length} records` : `${filtered.length} of ${rows.length} records`}
+              {server
+                ? totalCount === 0
+                  ? "0 records"
+                  : `${page * pageSize + 1}–${Math.min(totalCount, page * pageSize + filtered.length)} of ${totalCount} records`
+                : filtered.length === rows.length
+                  ? `${rows.length} records`
+                  : `${filtered.length} of ${rows.length} records`}
             </span>
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-1">

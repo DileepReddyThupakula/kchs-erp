@@ -26,7 +26,12 @@
     "wipe:demo-notices": "node --env-file-if-exists=.env.local scripts/demo-notices.mjs wipe",
     "wipe:demo-fees": "node --env-file-if-exists=.env.local scripts/demo-fees.mjs wipe",
     "test:ui": "vitest run",
-    "test": "npm run test:db && npm run test:ui"
+    "test": "npm run test:db && npm run test:ui",
+    "smoke:translate": "node --env-file=.env.local node_modules/.bin/vite-node scripts/smoke-translate.ts",
+    "seed:demo-bulk": "node --env-file-if-exists=.env.local scripts/demo-bulk-students.mjs seed",
+    "wipe:demo-bulk": "node --env-file-if-exists=.env.local scripts/demo-bulk-students.mjs wipe",
+    "seed:demo-exams": "node --env-file-if-exists=.env.local scripts/demo-exams.mjs seed",
+    "wipe:demo-exams": "node --env-file-if-exists=.env.local scripts/demo-exams.mjs wipe"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

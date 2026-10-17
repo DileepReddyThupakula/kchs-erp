@@ -72,6 +72,9 @@ export type StudentRow = {
   masked?: Record<string, string>;
   missingDocs?: string[];
   missingGov?: string[];
+  /** Admin / student_records list pages: just the counts (the names come with the export). */
+  missingDocsCount?: number;
+  missingGovCount?: number;
 };
 
 /**
@@ -164,6 +167,82 @@ export async function listStudents(me: CurrentStaff, yearId: string, mode: "all"
     }
     return row;
   });
+}
+
+export type StudentsPageParams = {
+  q?: string;
+  classId?: string;
+  sectionId?: string;
+  status?: string;
+  docs?: string;
+  gov?: string;
+  enrol?: string;
+  sort?: string;
+  dir?: string;
+  page?: number;
+  size?: number;
+  /** Only these students (the export of a selection). */
+  ids?: string[];
+  /** Include the government fields and masked IDs (export only). */
+  full?: boolean;
+};
+
+/**
+ * ONE page of students (search, filters, sorting and paging are done by the database function public.students_page,
+ * under the caller's own row-level security). mode "mine" = only the teacher's own sections, basic fields only.
+ */
+export async function getStudentsPage(yearId: string, p: StudentsPageParams, mode: "all" | "mine"): Promise<{ total: number; rows: StudentRow[] }> {
+  const supabase = await createClient();
+  const size = Math.min(Math.max(p.size ?? 25, 1), 250);
+  const page = Math.max(p.page ?? 0, 0);
+  const { data, error } = await supabase.rpc("students_page", {
+    p_year: yearId,
+    p_q: p.q || undefined,
+    p_class: p.classId || undefined,
+    p_section: p.sectionId || undefined,
+    p_status: p.status || undefined,
+    p_docs: p.docs || undefined,
+    p_gov: p.gov || undefined,
+    p_enrol: p.enrol || undefined,
+    p_mine: mode === "mine",
+    p_sort: p.sort || "name",
+    p_dir: p.dir || "asc",
+    p_offset: page * size,
+    p_limit: size,
+    p_ids: p.ids?.length ? p.ids : undefined,
+    p_full: p.full || undefined,
+  });
+  if (error) throw error;
+  const d = data as unknown as { total: number; rows: StudentRow[] };
+  return { total: Number(d?.total ?? 0), rows: d?.rows ?? [] };
+}
+
+/** The list page's URL parameters (?q=&class=&section=&status=&docs=&gov=&enrol=&sort=&dir=&page=&size=) as the query takes them. */
+export function studentsParamsFromUrl(sp: Record<string, string | string[] | undefined>, mode: "all" | "mine"): StudentsPageParams {
+  const one = (k: string) => (Array.isArray(sp[k]) ? sp[k]![0] : sp[k]) || undefined;
+  const status = one("status");
+  const size = Number(one("size"));
+  return {
+    q: one("q")?.slice(0, 80),
+    classId: one("class"),
+    sectionId: one("section"),
+    status: mode === "all" ? (status === "all" ? undefined : status ?? "active") : undefined,
+    docs: mode === "all" ? one("docs") : undefined,
+    gov: mode === "all" ? one("gov") : undefined,
+    enrol: mode === "all" ? one("enrol") : undefined,
+    sort: one("sort"),
+    dir: one("dir"),
+    page: Math.max(0, (Number(one("page")) || 1) - 1),
+    size: [25, 50, 100, 250].includes(size) ? size : 25,
+  };
+}
+
+/** getStudentsPage, but a page number past the end (e.g. after a filter narrowed the list) shows the last page. */
+export async function getStudentsPageClamped(yearId: string, p: StudentsPageParams, mode: "all" | "mine") {
+  const first = await getStudentsPage(yearId, p, mode);
+  const size = p.size ?? 25;
+  if (first.rows.length === 0 && first.total > 0 && (p.page ?? 0) > 0) return getStudentsPage(yearId, { ...p, page: Math.ceil(first.total / size) - 1 }, mode);
+  return first;
 }
 
 /** Active students per section for a year (RLS-scoped for teachers). */

@@ -8,7 +8,8 @@ import { can } from "@/lib/auth/permissions";
 import { resolveYear } from "@/lib/settings";
 import { friendlyDbError, type ActionState } from "@/lib/utils";
 import type { Json, StudentFieldDefinition } from "@/types/database";
-import { getSectionOptions, getStudentConfig, listStudents } from "./queries";
+import { getSectionOptions, getStudentConfig, getStudentsPage, listStudents, type StudentRow, type StudentsPageParams } from "./queries";
+import { requirePage } from "./page-guard";
 import { GENDERS, parseDefinitionValue, PHONE_RE, PIN_RE, validateImportRow, type ImportContext, type RawRow, type StudentPayload, type ValidatedRow } from "./fields";
 
 const uuid = z.string().uuid();
@@ -371,3 +372,20 @@ export async function governmentExportRows(input: { studentIds: string[]; includ
   return { headers, rows };
 }
 
+
+
+// ------------------------------------------------------------------ export of a whole filtered list
+/** Every student that matches the list's search and filters (not just the page on screen), for the export dialog. */
+export async function studentsForExport(params: StudentsPageParams, mode: "all" | "mine"): Promise<{ rows?: StudentRow[]; error?: string }> {
+  await requirePage(mode === "mine" ? "/my/students" : "/students");
+  const year = await resolveYear();
+  if (!year) return { rows: [] };
+  if (params.ids) z.array(uuid).max(1000).parse(params.ids);
+  const out: StudentRow[] = [];
+  for (let page = 0; page < 10; page++) {
+    const r = await getStudentsPage(year.id, { ...params, page, size: 250, full: true }, mode);
+    out.push(...r.rows);
+    if (out.length >= r.total || r.rows.length < 250) break;
+  }
+  return { rows: out };
+}

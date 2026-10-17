@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -26,6 +27,8 @@ import { Card } from "@/components/ui/card";
 import { TodayStrip } from "@/components/timetable/today-strip";
 import { AttendanceDashboard } from "@/components/attendance/dashboard-card";
 import { NoticesDashboard } from "@/components/notices/dashboard-cards";
+import { AdminDashboardCards, type AdminDashboardData } from "@/components/dashboard/admin-cards";
+import { todayIst } from "@/features/fees/shared";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard" };
@@ -66,7 +69,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const checklist = can(me, "settings.edit") ? detailsChecklist(settings) : [];
   const actions = QUICK_ACTIONS.filter((a) => (a.teacherOnly ? me.role === "teacher" : !a.cap || can(me, a.cap)));
-  const stats = me.role === "teacher" ? await teacherStats() : await schoolStats();
+  // Admin: everything on the page comes from ONE database call (public.admin_dashboard); teachers keep their own queries
+  const today = todayIst();
+  const admin: AdminDashboardData | null =
+    me.role === "admin"
+      ? ((await supabase.rpc("admin_dashboard", { p_year: year?.id ?? "00000000-0000-0000-0000-000000000000", p_today: today })).data as unknown as AdminDashboardData | null)
+      : null;
+  const stats = me.role === "teacher" ? await teacherStats() : schoolStats();
 
   // Teachers see their own numbers only (scope rule R18).
   async function teacherStats(): Promise<Stat[]> {
@@ -83,22 +92,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     ];
   }
 
-  async function schoolStats(): Promise<Stat[]> {
-    const [classes, sections, subjects, staff] = await Promise.all([
-      supabase.from("classes").select("id", { count: "exact", head: true }).eq("is_active", true),
-      year
-        ? supabase.from("sections").select("id", { count: "exact", head: true }).eq("academic_year_id", year.id)
-        : Promise.resolve({ count: 0 }),
-      supabase.from("subjects").select("id", { count: "exact", head: true }).eq("is_active", true),
-      supabase.rpc("staff_directory"),
-    ]);
-    const activeStaff = (staff.data ?? []).filter((s) => s.status === "active").length;
+  function schoolStats(): Stat[] {
+    const c = admin?.counts ?? { classes: 0, sections: 0, subjects: 0, active_staff: 0 };
     const setup = can(me, "setup.view");
     return [
-      { label: "Classes", value: classes.count ?? 0, icon: School, accent: "navy", href: setup ? "/setup/classes?tab=classes" : undefined },
-      { label: `Sections ${year ? year.name : ""}`, value: sections.count ?? 0, icon: ClipboardList, accent: "gold", href: setup ? "/setup/classes" : undefined },
-      { label: "Subjects", value: subjects.count ?? 0, icon: BookOpen, accent: "green", href: setup ? "/setup/subjects" : undefined },
-      { label: "Active staff", value: activeStaff, icon: Users, accent: "cream", href: can(me, "staff.viewAll") ? "/staff" : undefined },
+      { label: "Classes", value: c.classes, icon: School, accent: "navy", href: setup ? "/setup/classes?tab=classes" : undefined },
+      { label: `Sections ${year ? year.name : ""}`, value: c.sections, icon: ClipboardList, accent: "gold", href: setup ? "/setup/classes" : undefined },
+      { label: "Subjects", value: c.subjects, icon: BookOpen, accent: "green", href: setup ? "/setup/subjects" : undefined },
+      { label: "Active staff", value: c.active_staff, icon: Users, accent: "cream", href: can(me, "staff.viewAll") ? "/staff" : undefined },
     ];
   }
   const remaining = checklist.filter((c) => !c.done).length;
@@ -121,9 +122,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </p>
       )}
 
-      <NoticesDashboard me={me} />
-      {me.role === "teacher" && <TodayStrip />}
-      <AttendanceDashboard me={me} />
+      {admin ? (
+        <AdminDashboardCards data={admin} today={today} deadline={settings?.diary_deadline ?? "15:30"} />
+      ) : (
+        <>
+          <Suspense fallback={<div className="skeleton mb-4 h-40 rounded-[var(--radius-card)]" aria-label="Loading notices" />}>
+            <NoticesDashboard me={me} />
+          </Suspense>
+          {me.role === "teacher" && (
+            <Suspense fallback={<div className="skeleton mb-4 h-24 rounded-[var(--radius-card)]" aria-label="Loading today" />}>
+              <TodayStrip />
+            </Suspense>
+          )}
+          <Suspense fallback={<div className="skeleton mb-4 h-32 rounded-[var(--radius-card)]" aria-label="Loading attendance" />}>
+            <AttendanceDashboard me={me} />
+          </Suspense>
+        </>
+      )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map(({ label, value, icon: Icon, accent, href, hint }) => {

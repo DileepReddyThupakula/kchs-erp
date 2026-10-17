@@ -22,16 +22,23 @@ if (!process.env.DATABASE_URL) {
 // transaction (rolled back with it), so a migration can be proven before it
 // is applied to the database.
 const pre = process.env.TEST_PRE_MIGRATION ? readFileSync(process.env.TEST_PRE_MIGRATION, "utf8") : "";
+// TEST_TODAY=YYYY-MM-DD: pretend "today" (school time) is that date INSIDE each test transaction, so
+// date-dependent tests can be proven on any weekday (e.g. TEST_TODAY=2026-10-17 is a Saturday).
+const fakeToday = process.env.TEST_TODAY;
+if (fakeToday && !/^\d{4}-\d{2}-\d{2}$/.test(fakeToday)) throw new Error("TEST_TODAY must be YYYY-MM-DD");
+const clock = fakeToday ? `create or replace function app.today_ist() returns date language sql stable set search_path = '' as $$ select '${fakeToday}'::date $$;` : "";
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
 
 let failed = 0;
 let total = 0;
+let dbTotal = 0, dbFailed = 0, dbFiles = 0;
 for (const file of files) {
   console.log(`\n# ${file}`);
   try {
     await client.query("begin");
     if (pre) await client.query(pre);
+    if (clock) await client.query(clock);
     await client.query(helpers);
     await client.query(readFileSync(join(dir, file), "utf8"));
     await client.query("select set_config('role', 'postgres', true)");
@@ -49,6 +56,7 @@ for (const file of files) {
     await client.query("rollback");
   }
 }
+dbTotal = total; dbFailed = failed; dbFiles = files.length;
 await client.end();
 
 // API tests: tests/api/*.mjs (sign in as demo users through Supabase, read-only)
@@ -77,5 +85,7 @@ for (const file of apiFiles) {
   }
 }
 
-console.log(`\n${total - failed}/${total} passed`);
+console.log(`\nDATABASE tests: ${dbTotal - dbFailed}/${dbTotal} passed (${dbFiles} files)`);
+console.log(`API tests:      ${(total - dbTotal) - (failed - dbFailed)}/${total - dbTotal} passed (${apiFiles.length} files)`);
+console.log(`TOTAL:          ${total - failed}/${total} passed`);
 process.exit(failed ? 1 : 0);

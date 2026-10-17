@@ -6,13 +6,14 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
 import { EmptyState, PageHeader } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button-classes";
-import { getSectionOptions, getStudentConfig, listStudents } from "@/features/students/queries";
+import { getSectionOptions, getStudentConfig, getStudentsPageClamped, studentsParamsFromUrl } from "@/features/students/queries";
 import { StudentsTable } from "./students-table";
 
 export const metadata = { title: "Students" };
 
 /** Admin and teachers with the student_records duty (site-map /students). */
-export default async function StudentsPage() {
+export default async function StudentsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams;
   const me = await requirePage("/students");
   const year = await resolveYear();
   const header = (
@@ -42,11 +43,15 @@ export default async function StudentsPage() {
     );
   }
   const supabase = await createClient();
-  const [rows, sections, { definitions }] = await Promise.all([listStudents(me, year.id, "all"), getSectionOptions(supabase, year.id), getStudentConfig(supabase)]);
+  const [{ rows, total }, sections, { definitions }] = await Promise.all([
+    getStudentsPageClamped(year.id, studentsParamsFromUrl(sp, "all"), "all"),
+    getSectionOptions(supabase, year.id),
+    getStudentConfig(supabase),
+  ]);
   return (
     <>
       {header}
-      <StudentsTable rows={rows} mode="manage" sections={sections} definitions={definitions} yearName={year.name} canEdit={can(me, "students.edit")} canChangeStatus={can(me, "students.status")} />
+      <StudentsTable rows={rows} total={total} mode="manage" sections={sections} definitions={definitions} yearName={year.name} canEdit={can(me, "students.edit")} canChangeStatus={can(me, "students.status")} />
     </>
   );
 }
