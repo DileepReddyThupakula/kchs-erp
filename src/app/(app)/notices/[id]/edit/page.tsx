@@ -3,7 +3,7 @@ import { Megaphone } from "lucide-react";
 import { requirePage } from "@/features/students/page-guard";
 import { requireCapability } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { getSchoolSettings } from "@/lib/settings";
+import { getReceiptSchool } from "@/features/fees/receipt-school";
 import { PageHeader } from "@/components/ui/card";
 import { NoticeForm, type NoticeDraft } from "@/components/notices/notice-form";
 import { signedLinks } from "@/features/notices/queries";
@@ -23,12 +23,15 @@ export default async function EditNoticePage({ params }: { params: Promise<{ id:
     supabase.from("notice_attachments").select("id, file_path, file_name, mime_type, size_bytes").eq("notice_id", id),
     supabase.from("classes").select("id, name, sort_order").eq("is_active", true).order("sort_order"),
     supabase.rpc("staff_directory"),
-    getSchoolSettings(),
+    getReceiptSchool(),
   ]);
   const initial: NoticeDraft = {
     id: n.id,
     title: n.title,
     body: n.body,
+    titleTe: n.title_te ?? "",
+    bodyTe: n.body_te ?? "",
+    teStatus: n.te_status,
     audience: n.audience,
     roles: (aud ?? []).map((a) => a.role).filter(Boolean) as string[],
     classIds: (aud ?? []).map((a) => a.class_id).filter(Boolean) as string[],
@@ -48,7 +51,7 @@ export default async function EditNoticePage({ params }: { params: Promise<{ id:
         classes={(classes ?? []).map((c) => ({ id: c.id, name: c.name }))}
         teachers={(dir ?? []).filter((s) => s.status === "active").map((s) => ({ id: s.id, name: s.full_name, designation: s.designation ?? "" }))}
         files={await signedLinks(supabase, "notice-files", files ?? [])}
-        school={settings?.name ?? "School"}
+        school={settings}
         today={todayIst()}
       />
     </>

@@ -147,6 +147,7 @@ const sectionSchema = z.object({
   room: blankToNull,
   capacity: optionalInt,
   class_teacher_id: blankToNull,
+  parents_group_name: blankToNull,
 });
 
 export async function saveSection(_: ActionState, fd: FormData): Promise<ActionState> {

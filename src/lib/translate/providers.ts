@@ -1,15 +1,18 @@
 import "server-only";
 import type { Provider } from "./core";
+import { geminiTranslate } from "./gemini";
 
 /** Settings come from environment variables only (never sent to the browser, never logged). */
-export function configuredProviderName(): "azure" | "google" | "mock" | null {
+export function configuredProviderName(): "gemini" | "azure" | "google" | "mock" | null {
   const pick = (process.env.TRANSLATION_PROVIDER ?? "").toLowerCase();
   if (pick === "mock" && process.env.NODE_ENV !== "production") return "mock";
   const azure = !!process.env.AZURE_TRANSLATOR_KEY && !!process.env.AZURE_TRANSLATOR_REGION;
   const google = !!process.env.GOOGLE_TRANSLATE_API_KEY;
+  const gemini = !!process.env.GEMINI_API_KEY;
+  if (pick === "gemini") return gemini ? "gemini" : null;
   if (pick === "azure") return azure ? "azure" : null;
   if (pick === "google") return google ? "google" : null;
-  return azure ? "azure" : google ? "google" : null;
+  return gemini ? "gemini" : azure ? "azure" : google ? "google" : null; // gemini is the default
 }
 
 async function post(url: string, headers: Record<string, string>, body: unknown): Promise<unknown> {
@@ -51,10 +54,23 @@ const google: Provider = {
   },
 };
 
+const gemini: Provider & { lastModel?: string } = {
+  name: "gemini",
+  async translate(html) {
+    const r = await geminiTranslate(html, {
+      apiKey: process.env.GEMINI_API_KEY!,
+      model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
+      fallbackModel: process.env.GEMINI_FALLBACK_MODEL || undefined,
+    });
+    gemini.lastModel = r.model;
+    return r.text;
+  },
+};
+
 /** Development only (TRANSLATION_PROVIDER=mock): fake "Telugu" so the screens can be checked without an account. */
 const mock: Provider = { name: "mock", translate: async (html) => `అనువాదం (పరీక్ష): ${html}` };
 
 export function getProvider(): Provider | null {
   const n = configuredProviderName();
-  return n === "azure" ? azure : n === "google" ? google : n === "mock" ? mock : null;
+  return n === "gemini" ? gemini : n === "azure" ? azure : n === "google" ? google : n === "mock" ? mock : null;
 }

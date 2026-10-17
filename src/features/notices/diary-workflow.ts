@@ -17,12 +17,19 @@ export function nowHmIst() {
 export type BoardState = "none" | "waiting" | "ready" | "published";
 export type BoardRow = { sectionId: string; label: string; classId: string; className: string; expected: number; submitted: number; published: number; pending: number; skipped: number; state: BoardState; late: boolean };
 
-export async function getBoard(supabase: Supa, sections: Section[], date: string, today: string, deadline: string): Promise<BoardRow[]> {
-  const { data } = await supabase.rpc("diary_board", { p_date: date });
-  const byId = new Map((data ?? []).map((r) => [r.section_id, r]));
+type BoardCounts = { expected: number; submitted: number; published: number; pending: number; skipped: number };
+
+/** The board from the day's per-section counts (the one calculation behind the board, the dashboard and the class diary). */
+export function boardRows(
+  sections: { id: string; label: string; classId: string; className: string }[],
+  counts: Map<string, BoardCounts>,
+  date: string,
+  today: string,
+  deadline: string,
+): BoardRow[] {
   const hm = nowHmIst();
   return sections.map((s) => {
-    const r = byId.get(s.id) ?? { expected: 0, submitted: 0, published: 0, pending: 0, skipped: 0 };
+    const r = counts.get(s.id) ?? { expected: 0, submitted: 0, published: 0, pending: 0, skipped: 0 };
     const complete = r.expected > 0 && r.submitted >= r.expected;
     const state: BoardState = r.published > 0 && r.pending === 0 ? "published" : r.pending > 0 && (complete || r.expected === 0) ? "ready" : r.expected === 0 && r.published + r.pending === 0 ? "none" : "waiting";
     return {
@@ -41,20 +48,27 @@ export async function getBoard(supabase: Supa, sections: Section[], date: string
   });
 }
 
+export async function getBoard(supabase: Supa, sections: Section[], date: string, today: string, deadline: string): Promise<BoardRow[]> {
+  const { data } = await supabase.rpc("diary_board", { p_date: date });
+  return boardRows(sections, new Map((data ?? []).map((r) => [r.section_id, r])), date, today, deadline);
+}
+
 // ------------------------------------------------------------------ Admin / duty: one class, one day
 export type TeStatus = "none" | "pending" | "auto" | "reviewed";
 export type EntryInfo = { id: string; body: string; bodyTe: string; teStatus: TeStatus; status: DiaryStatus; authorName: string; files: FileLink[] };
 export type ClassLine = { key: string; subjectId: string | null; subject: string | null; subjectTe: string | null; kind: "subject" | "remark"; period: number | null; teachers: string; skipped: boolean; expected: boolean; entry: EntryInfo | null };
 
 export async function getClassDay(supabase: Supa, sectionId: string, date: string, subjects: Record<string, string>, subjectsTe: Record<string, string> = {}): Promise<ClassLine[]> {
-  const [{ data: plan }, { data: links }, { data: dir }] = await Promise.all([
+  const [{ data: plan }, entriesAll, { data: dir }] = await Promise.all([
     supabase.rpc("diary_class_plan", { p_section: sectionId, p_date: date }),
-    supabase.from("diary_entry_sections").select("entry_id").eq("section_id", sectionId),
+    fetchAll((f, t) => supabase.from("diary_entries").select("id, subject_id, kind, body, body_te, te_status, status, author_id, created_by").eq("entry_date", date).is("archived_at", null).range(f, t)),
     supabase.rpc("staff_directory"),
   ]);
   const names = new Map((dir ?? []).map((s) => [s.id, s.full_name]));
+  // only the section links of the day's entries, never the whole table
+  const { data: links } = entriesAll.length ? await supabase.from("diary_entry_sections").select("entry_id").eq("section_id", sectionId).in("entry_id", entriesAll.map((e) => e.id)) : { data: [] };
   const inSection = new Set((links ?? []).map((l) => l.entry_id));
-  const entries = (await fetchAll((f, t) => supabase.from("diary_entries").select("id, subject_id, kind, body, body_te, te_status, status, author_id, created_by").eq("entry_date", date).is("archived_at", null).range(f, t))).filter((e) => inSection.has(e.id));
+  const entries = entriesAll.filter((e) => inSection.has(e.id));
   const { data: att } = entries.length ? await supabase.from("diary_attachments").select("id, entry_id, file_path, file_name, mime_type, size_bytes").in("entry_id", entries.map((e) => e.id)) : { data: [] };
   const links2 = await signedLinks(supabase, "diary-files", att ?? []);
   const files = new Map<string, FileLink[]>();
@@ -95,16 +109,16 @@ export type SubmitCard = {
 };
 
 export async function getSubmitCards(supabase: Supa, me: CurrentStaff, sections: Section[], subjects: Record<string, string>, date: string): Promise<SubmitCard[]> {
-  const [{ data: mine }, { data: reminders }, { data: links }] = await Promise.all([
+  // the day's entries first (a small list), then only THEIR section links: never the whole links table
+  const [{ data: mine }, { data: reminders }, entriesAll] = await Promise.all([
     supabase.from("teacher_assignments").select("section_id, subject_id").eq("staff_id", me.staffId),
     supabase.rpc("my_diary_reminders"),
-    supabase.from("diary_entry_sections").select("entry_id, section_id"),
+    fetchAll((f, t) => supabase.from("diary_entries").select("id, subject_id, kind, body, body_te, status, author_id").eq("entry_date", date).is("archived_at", null).range(f, t)),
   ]);
+  const entries = entriesAll.filter((e) => e.author_id === me.staffId || e.status === "published");
+  const { data: links } = entries.length ? await supabase.from("diary_entry_sections").select("entry_id, section_id").in("entry_id", entries.map((e) => e.id)) : { data: [] };
   const sectionOf = new Map<string, string>();
   (links ?? []).forEach((l) => sectionOf.set(l.entry_id, l.section_id));
-  const entries = (await fetchAll((f, t) => supabase.from("diary_entries").select("id, subject_id, kind, body, body_te, status, author_id").eq("entry_date", date).is("archived_at", null).range(f, t))).filter(
-    (e) => e.author_id === me.staffId || e.status === "published",
-  );
   const { data: att } = entries.length ? await supabase.from("diary_attachments").select("id, entry_id, file_path, file_name, mime_type, size_bytes").in("entry_id", entries.map((e) => e.id)) : { data: [] };
   const fl = await signedLinks(supabase, "diary-files", att ?? []);
   const files = new Map<string, FileLink[]>();

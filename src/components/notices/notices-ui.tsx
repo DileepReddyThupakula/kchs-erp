@@ -3,13 +3,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Archive, Check, ClipboardCopy, Eye, Pencil, Printer, RotateCcw, Send, Star } from "lucide-react";
+import { Archive, Check, Eye, Pencil, Printer, RotateCcw, Send, Star } from "lucide-react";
 import { Badge, Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { buttonClasses } from "@/components/ui/button-classes";
 import { DataTable, type Column } from "@/components/data-table/data-table";
 import { archiveNotice, markNoticeRead, publishNotice } from "@/features/notices/actions";
-import { AUDIENCE_LABEL, fmtShort } from "@/features/notices/shared";
+import { AUDIENCE_LABEL, fmtShort, isParentsAudience } from "@/features/notices/shared";
 
 export type NoticeState = "draft" | "scheduled" | "active" | "expired" | "archived";
 export type NoticeItem = {
@@ -25,6 +25,7 @@ export type NoticeItem = {
   readCount: number | null; // Admin only
   total: number | null;
   iRead: boolean;
+  sends: { sent: number; total: number } | null; // Admin and duty only
 };
 const STATE_TEXT: Record<NoticeState, string> = { draft: "Draft", scheduled: "Scheduled", active: "Published", expired: "Expired", archived: "Archived" };
 const STATE_TONE = { draft: "warning", scheduled: "info", active: "success", expired: "neutral", archived: "neutral" } as const;
@@ -60,9 +61,12 @@ export function NoticesTable({ rows, canEdit, isAdmin }: { rows: NoticeItem[]; c
       exportValue: (r) => r.title,
     },
     { id: "no", header: "Circular no", cell: (r) => <span className="font-mono text-xs">{r.circularNo ?? "—"}</span>, sortValue: (r) => r.circularNo ?? "", exportValue: (r) => r.circularNo ?? "" },
-    { id: "audience", header: "For", cell: (r) => <span className="line-clamp-1 max-w-48">{r.audienceText}</span>, sortValue: (r) => r.audienceText, exportValue: (r) => r.audienceText },
+    { id: "audience", header: "For", cell: (r) => (<span className="inline-flex items-center gap-1.5"><span className="line-clamp-1 max-w-48">{r.audienceText}</span>{isParentsAudience(r.audience) && <Badge tone="gold">Sent to parents</Badge>}</span>), sortValue: (r) => r.audienceText, exportValue: (r) => r.audienceText },
     { id: "date", header: "Publish date", cell: (r) => fmtShort(r.publishDate), sortValue: (r) => r.publishDate, exportValue: (r) => r.publishDate },
     { id: "expires", header: "Expires", cell: (r) => (r.expiresOn ? fmtShort(r.expiresOn) : <span className="text-muted">—</span>), sortValue: (r) => r.expiresOn ?? "9999", exportValue: (r) => r.expiresOn ?? "" },
+    ...(canEdit
+      ? [{ id: "sends", header: "WhatsApp", cell: (r: NoticeItem) => (r.sends ? <span className="whitespace-nowrap text-xs">Sent to {r.sends.sent} of {r.sends.total} group{r.sends.total === 1 ? "" : "s"}</span> : <span className="text-muted">—</span>), sortValue: (r: NoticeItem) => r.sends?.sent ?? -1, exportValue: (r: NoticeItem) => (r.sends ? `${r.sends.sent}/${r.sends.total}` : "") }]
+      : []),
     { id: "state", header: "Status", cell: (r) => <Badge tone={STATE_TONE[r.state]}>{STATE_TEXT[r.state]}</Badge>, sortValue: (r) => r.state, exportValue: (r) => STATE_TEXT[r.state] },
     isAdmin
       ? { id: "read", header: "Read by", align: "right", cell: (r) => (r.total == null ? "—" : `${r.readCount} of ${r.total}`), sortValue: (r) => r.readCount ?? -1, exportValue: (r) => (r.total == null ? "" : `${r.readCount}/${r.total}`) }
@@ -104,7 +108,7 @@ export function NoticesTable({ rows, canEdit, isAdmin }: { rows: NoticeItem[]; c
 }
 
 /** Buttons on the notice page. */
-export function NoticeActions({ id, state, canEdit, isAdmin, iRead, whatsapp }: { id: string; state: NoticeState; canEdit: boolean; isAdmin: boolean; iRead: boolean; whatsapp: string }) {
+export function NoticeActions({ id, state, canEdit, isAdmin, iRead, children }: { id: string; state: NoticeState; canEdit: boolean; isAdmin: boolean; iRead: boolean; children?: React.ReactNode }) {
   const run = useRun();
   const [busy, setBusy] = useState(false);
   return (
@@ -134,22 +138,10 @@ export function NoticeActions({ id, state, canEdit, isAdmin, iRead, whatsapp }: 
       )}
       {canEdit && (
         <>
+          {children}
           <Link href={`/print/notice/${id}`} target="_blank" className={buttonClasses("secondary")}>
             <Printer className="size-4" aria-hidden /> Print circular
           </Link>
-          <Button
-            variant="secondary"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(whatsapp);
-                toast.success("Copied. Paste it into WhatsApp.");
-              } catch {
-                window.prompt("Copy this text:", whatsapp);
-              }
-            }}
-          >
-            <ClipboardCopy className="size-4" /> Copy for WhatsApp
-          </Button>
         </>
       )}
       {isAdmin &&

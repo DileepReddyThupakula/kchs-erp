@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { BookOpenCheck, CheckCircle2, Circle, Megaphone, Pin } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
@@ -11,6 +12,163 @@ import { getSubjectNameMap } from "@/features/notices/queries";
 import { getSectionsInfo } from "@/features/timetable/queries";
 import { fmtShort, noticeState } from "@/features/notices/shared";
 import { todayIst } from "@/features/fees/shared";
+
+function CardSkeleton() {
+  return (
+    <Card aria-hidden>
+      <div className="skeleton mb-3 h-5 w-48 rounded" />
+      <div className="skeleton mb-2 h-4 w-full rounded" />
+      <div className="skeleton mb-2 h-4 w-5/6 rounded" />
+      <div className="skeleton h-4 w-2/3 rounded" />
+    </Card>
+  );
+}
+
+async function TeacherDiaryCard({ me }: { me: CurrentStaff }) {
+  const supabase = await createClient();
+  const today = todayIst();
+  const year = await resolveYear();
+  const cards: React.ReactNode[] = [];
+  if (me.role !== "admin" && year) {
+    const [sections, subjects] = await Promise.all([getSectionsInfo(supabase, year.id), getSubjectNameMap(supabase)]);
+    const todo = (await getSubmitCards(supabase, me, sections, subjects, today)).filter((c) => c.status === "new" || c.status === "draft");
+    if (todo.length || sections.length) {
+      cards.push(
+        <Card key="diary-submit">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 font-semibold text-navy-900">
+              <BookOpenCheck className="size-4 text-navy-500" aria-hidden /> Diary to submit today
+            </h2>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${todo.length ? "bg-amber-100 text-amber-900" : "bg-peacock-100 text-peacock-800"}`}>{todo.length ? `${todo.length} to do` : "All done"}</span>
+          </div>
+          {todo.length === 0 ? (
+            <p className="text-sm text-muted">Everything for today is submitted.</p>
+          ) : (
+            <ul className="divide-y divide-border text-sm">
+              {todo.slice(0, 6).map((c) => (
+                <li key={c.key}>
+                  <Link href="/diary/submit" className="flex items-center gap-2 py-1.5 hover:text-navy-900">
+                    <span className="flex-1 font-medium">
+                      {c.sectionLabel} · {c.subjectName ?? "Class remark"}
+                    </span>
+                    {c.reminded && <span className="rounded-full bg-gold-100 px-1.5 text-xs font-semibold text-gold-800">Reminder</span>}
+                    <span className="text-xs text-amber-800">{c.status === "draft" ? "Draft" : "Not started"}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href="/diary/submit" className="mt-2 inline-block text-sm font-medium text-navy-700 hover:underline">
+            Open Submit diary
+          </Link>
+        </Card>,
+      );
+    }
+  }
+  return <>{cards}</>;
+}
+
+async function ExamReminderCard({ me }: { me: CurrentStaff }) {
+  const supabase = await createClient();
+  const year = await resolveYear();
+  const cards: React.ReactNode[] = [];
+  if (me.role === "admin" && year) {
+    // exam reminder: the working days printed on report cards count every Mon-Sat that is not a holiday
+    const { count: nGroups } = await supabase.from("result_groups").select("id", { count: "exact", head: true }).eq("academic_year_id", year.id);
+    const { count: nHolidays } = await supabase.from("holidays").select("id", { count: "exact", head: true }).eq("academic_year_id", year.id).eq("kind", "declared");
+    if ((nGroups ?? 0) > 0) {
+      cards.push(
+        <Card key="exam-reminder" className="border-gold-300 bg-gold-50">
+          <h2 className="mb-1 flex items-center gap-2 font-semibold text-navy-900">Before printing report cards</h2>
+          <p className="text-sm text-navy-900">
+            Add every <b>school vacation and break</b> to the holiday list{(nHolidays ?? 0) === 0 ? " (none has been added yet)" : ` (${nHolidays} added so far)`}. Otherwise the working days on the report card will be too high. Also enter the real <b>term dates</b> for each class.
+          </p>
+          <p className="mt-1 text-sm">
+            <Link href="/setup/academic-years" className="font-medium text-navy-700 underline">
+              Holiday list
+            </Link>{" "}
+            ·{" "}
+            <Link href="/exams/scheme" className="font-medium text-navy-700 underline">
+              Term dates (Exam scheme)
+            </Link>
+          </p>
+        </Card>,
+      );
+    }
+  }
+  return <>{cards}</>;
+}
+
+async function TranslationWarningCard({ me }: { me: CurrentStaff }) {
+  const supabase = await createClient();
+  const cards: React.ReactNode[] = [];
+  if (me.role === "admin") {
+    const { data: u } = await supabase.rpc("translation_status");
+    const used = Number(u?.[0]?.used ?? 0);
+    const cap = Number(u?.[0]?.cap ?? 0);
+    const pct = cap > 0 ? Math.round((used / cap) * 100) : used > 0 ? 100 : 0;
+    if (cap > 0 && pct >= 80) {
+      cards.push(
+        <Card key="translation" className="border-amber-300 bg-amber-50">
+          <h2 className="mb-1 flex items-center gap-2 font-semibold text-amber-900">Telugu translation: {pct}% of this month&apos;s limit used</h2>
+          <p className="text-sm text-amber-900">
+            {used.toLocaleString("en-IN")} of {cap.toLocaleString("en-IN")} characters.{" "}
+            {pct >= 100 ? "Automatic translation is switched off until next month: new lines show “Translation pending” and can be typed by hand." : "It switches off by itself at the limit."}{" "}
+            <Link href="/settings" className="font-medium underline">
+              School settings
+            </Link>
+          </p>
+        </Card>,
+      );
+    }
+  }
+  return <>{cards}</>;
+}
+
+async function DiaryBoardCard({ me }: { me: CurrentStaff }) {
+  const supabase = await createClient();
+  const today = todayIst();
+  const year = await resolveYear();
+  const cards: React.ReactNode[] = [];
+  if (year && can(me, "notices.edit")) {
+    const [sections, settings] = await Promise.all([getSectionsInfo(supabase, year.id), getSchoolSettings()]);
+    const rows = (await getBoard(supabase, sections, today, today, settings?.diary_deadline ?? "15:30")).filter((r) => r.expected > 0 && r.state !== "published" && r.state !== "none");
+    const late = rows.filter((r) => r.late);
+    cards.push(
+      <Card key="diary-board">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 font-semibold text-navy-900">
+            <BookOpenCheck className="size-4 text-navy-500" aria-hidden /> Diary: classes pending or late today
+          </h2>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${late.length ? "bg-red-100 text-red-800" : "bg-gold-100 text-gold-800"}`}>
+            {rows.length} pending{late.length ? ` · ${late.length} late` : ""}
+          </span>
+        </div>
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted">Every class with a diary today is published.</p>
+        ) : (
+          <ul className="divide-y divide-border text-sm">
+            {rows.slice(0, 6).map((r) => (
+              <li key={r.sectionId}>
+                <Link href={`/diary/class/${r.sectionId}?date=${today}`} className="flex items-center gap-2 py-1.5 hover:text-navy-900">
+                  <span className="flex-1 font-medium">{r.label}</span>
+                  <span className="text-xs text-muted">
+                    {r.submitted}/{r.expected} in
+                  </span>
+                  {r.late && <span className="rounded-full bg-red-100 px-1.5 text-xs font-semibold text-red-800">Late</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        <Link href="/diary/class" className="mt-2 inline-block text-sm font-medium text-navy-700 hover:underline">
+          Open Class diary
+        </Link>
+      </Card>,
+    );
+  }
+  return <>{cards}</>;
+}
 
 /**
  * Dashboard: important notices pinned at the top for everyone they are addressed to
@@ -31,12 +189,8 @@ export async function NoticesDashboard({ me }: { me: CurrentStaff }) {
 
   if (me.role === "admin") {
     const recent = live.slice(0, 5);
-    const counts = await Promise.all(
-      recent.map(async (n) => {
-        const { data: r } = await supabase.rpc("notice_readers", { p_notice: n.id });
-        return { id: n.id, read: (r ?? []).filter((x) => x.read_at).length, total: (r ?? []).length };
-      }),
-    );
+    const { data: rc } = await supabase.rpc("notice_read_counts");
+    const counts = (rc ?? []).map((c) => ({ id: c.notice_id, read: c.read_count, total: c.total }));
     cards.push(
       <Card key="recent">
         <div className="mb-2 flex items-center justify-between">
@@ -101,102 +255,20 @@ export async function NoticesDashboard({ me }: { me: CurrentStaff }) {
     );
   }
 
-  const year = await resolveYear();
-  if (me.role !== "admin" && year) {
-    const [sections, subjects] = await Promise.all([getSectionsInfo(supabase, year.id), getSubjectNameMap(supabase)]);
-    const todo = (await getSubmitCards(supabase, me, sections, subjects, today)).filter((c) => c.status === "new" || c.status === "draft");
-    if (todo.length || sections.length) {
-      cards.push(
-        <Card key="diary-submit">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-semibold text-navy-900">
-              <BookOpenCheck className="size-4 text-navy-500" aria-hidden /> Diary to submit today
-            </h2>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${todo.length ? "bg-amber-100 text-amber-900" : "bg-peacock-100 text-peacock-800"}`}>{todo.length ? `${todo.length} to do` : "All done"}</span>
-          </div>
-          {todo.length === 0 ? (
-            <p className="text-sm text-muted">Everything for today is submitted.</p>
-          ) : (
-            <ul className="divide-y divide-border text-sm">
-              {todo.slice(0, 6).map((c) => (
-                <li key={c.key}>
-                  <Link href="/diary/submit" className="flex items-center gap-2 py-1.5 hover:text-navy-900">
-                    <span className="flex-1 font-medium">
-                      {c.sectionLabel} · {c.subjectName ?? "Class remark"}
-                    </span>
-                    {c.reminded && <span className="rounded-full bg-gold-100 px-1.5 text-xs font-semibold text-gold-800">Reminder</span>}
-                    <span className="text-xs text-amber-800">{c.status === "draft" ? "Draft" : "Not started"}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Link href="/diary/submit" className="mt-2 inline-block text-sm font-medium text-navy-700 hover:underline">
-            Open Submit diary
-          </Link>
-        </Card>,
-      );
-    }
-  }
-
-  if (me.role === "admin") {
-    const { data: u } = await supabase.rpc("translation_status");
-    const used = Number(u?.[0]?.used ?? 0);
-    const cap = Number(u?.[0]?.cap ?? 0);
-    const pct = cap > 0 ? Math.round((used / cap) * 100) : used > 0 ? 100 : 0;
-    if (cap > 0 && pct >= 80) {
-      cards.push(
-        <Card key="translation" className="border-amber-300 bg-amber-50">
-          <h2 className="mb-1 flex items-center gap-2 font-semibold text-amber-900">Telugu translation: {pct}% of this month&apos;s limit used</h2>
-          <p className="text-sm text-amber-900">
-            {used.toLocaleString("en-IN")} of {cap.toLocaleString("en-IN")} characters.{" "}
-            {pct >= 100 ? "Automatic translation is switched off until next month: new lines show “Translation pending” and can be typed by hand." : "It switches off by itself at the limit."}{" "}
-            <Link href="/settings" className="font-medium underline">
-              School settings
-            </Link>
-          </p>
-        </Card>,
-      );
-    }
-  }
-
-  if (year && can(me, "notices.edit")) {
-    const [sections, settings] = await Promise.all([getSectionsInfo(supabase, year.id), getSchoolSettings()]);
-    const rows = (await getBoard(supabase, sections, today, today, settings?.diary_deadline ?? "15:30")).filter((r) => r.expected > 0 && r.state !== "published" && r.state !== "none");
-    const late = rows.filter((r) => r.late);
-    cards.push(
-      <Card key="diary-board">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 font-semibold text-navy-900">
-            <BookOpenCheck className="size-4 text-navy-500" aria-hidden /> Diary: classes pending or late today
-          </h2>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${late.length ? "bg-red-100 text-red-800" : "bg-gold-100 text-gold-800"}`}>
-            {rows.length} pending{late.length ? ` · ${late.length} late` : ""}
-          </span>
-        </div>
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted">Every class with a diary today is published.</p>
-        ) : (
-          <ul className="divide-y divide-border text-sm">
-            {rows.slice(0, 6).map((r) => (
-              <li key={r.sectionId}>
-                <Link href={`/diary/class/${r.sectionId}?date=${today}`} className="flex items-center gap-2 py-1.5 hover:text-navy-900">
-                  <span className="flex-1 font-medium">{r.label}</span>
-                  <span className="text-xs text-muted">
-                    {r.submitted}/{r.expected} in
-                  </span>
-                  {r.late && <span className="rounded-full bg-red-100 px-1.5 text-xs font-semibold text-red-800">Late</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-        <Link href="/diary/class" className="mt-2 inline-block text-sm font-medium text-navy-700 hover:underline">
-          Open Class diary
-        </Link>
-      </Card>,
-    );
-  }
+  cards.push(
+    <Suspense key="teacher-diary" fallback={<CardSkeleton />}>
+      <TeacherDiaryCard me={me} />
+    </Suspense>,
+    <Suspense key="exam" fallback={null}>
+      <ExamReminderCard me={me} />
+    </Suspense>,
+    <Suspense key="translation" fallback={null}>
+      <TranslationWarningCard me={me} />
+    </Suspense>,
+    <Suspense key="board" fallback={<CardSkeleton />}>
+      <DiaryBoardCard me={me} />
+    </Suspense>,
+  );
 
   return (
     <>

@@ -171,6 +171,9 @@ export function SectionsTable({
                         ))}
                       </Select>
                     </Field>
+                    <Field label="Parents WhatsApp group name (optional)" name="parents_group_name" errors={fe.parents_group_name} hint="Only a label in the notice send checklist, e.g. “Class 8 – A parents group”." className="sm:col-span-2">
+                      <Input id="parents_group_name" name="parents_group_name" defaultValue={s?.parents_group_name ?? ""} />
+                    </Field>
                   </FormSection>
                   <FormSection title="Room">
                     <Field label="Room" name="room" errors={fe.room}>

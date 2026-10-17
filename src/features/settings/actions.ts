@@ -38,6 +38,8 @@ const schema = z.object({
   admission_no_prefix: z.string().trim(),
   receipt_no_prefix: z.string().trim(),
   circular_prefix: z.string().trim(),
+  staff_group_name: z.string().trim(),
+  default_pass_percent: z.coerce.number().min(0).max(100),
   translation_monthly_cap: z.coerce.number().int().min(0).max(100000000),
   diary_deadline: z.string().regex(/^\d{2}:\d{2}$/, "Use a time like 15:30"),
 });
@@ -57,7 +59,7 @@ export async function updateSettings(_: ActionState, formData: FormData): Promis
   // Motto lives in the `extra` JSON (no dedicated column yet) — merge, don't overwrite.
   const { data: current } = await supabase.from("school_settings").select("extra").eq("id", 1).single();
   const extra = { ...((current?.extra as Record<string, unknown> | null) ?? {}), motto };
-  const { error } = await supabase.from("school_settings").update({ ...columns, circular_prefix: columns.circular_prefix || null, extra }).eq("id", 1);
+  const { error } = await supabase.from("school_settings").update({ ...columns, circular_prefix: columns.circular_prefix || null, staff_group_name: columns.staff_group_name || null, extra }).eq("id", 1);
   if (error) return { error: friendlyDbError(error) };
   revalidatePath("/", "layout");
   return { ok: true, message: "Settings saved." };

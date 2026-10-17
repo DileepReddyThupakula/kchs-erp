@@ -106,7 +106,9 @@ export function CardRenderer({ cards, renderKey, onDone, onError }: { cards: Rea
     (async () => {
       try {
         await document.fonts.ready;
-        await Promise.all(Array.from(document.images).filter((i) => !i.complete).map((i) => new Promise((r) => { i.onload = i.onerror = () => r(null); })));
+        // wait only for the images of the cards being drawn (other images on the page may be lazy and never load)
+        const mine = refs.current.flatMap((el) => (el ? Array.from(el.querySelectorAll("img")) : []));
+        await Promise.all(mine.filter((i) => !i.complete).map((i) => new Promise((r) => { i.onload = i.onerror = () => r(null); setTimeout(() => r(null), 4000); })));
         const out: RenderedCard[] = [];
         for (const el of refs.current.slice(0, cards.length)) {
           if (!el) continue;

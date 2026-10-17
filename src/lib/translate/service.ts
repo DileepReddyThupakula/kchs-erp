@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { md5, planEntryTranslation, translateToTelugu, type Store, type TranslateResult } from "./core";
+import { hasTelugu, md5, planEntryTranslation, translateToTelugu, type Store, type TranslateResult } from "./core";
 import { getProvider } from "./providers";
 
 /** Cache and monthly counter live in the database (service role only). */
@@ -47,4 +47,42 @@ export const REASON_TEXT: Record<string, string> = {
   failed: "the translation service did not answer",
   validation: "the translation changed a number, so it was not used",
   changed: "the text changed meanwhile",
+  has_telugu: "the text already contains Telugu",
+  empty: "there is no text to translate",
 };
+
+/** Notices: same rules as the diary (reviewed Telugu is never overwritten, numbers protected, same cap). Title and text are translated together. */
+export async function translateNotice(noticeId: string): Promise<Outcome> {
+  const db = createAdminClient();
+  const { data: n } = await db.from("notices").select("id, title, body, title_te, body_te, te_status, te_src_hash, status").eq("id", noticeId).maybeSingle();
+  if (!n) return { state: "pending", reason: "missing" };
+  const hash = md5(`${n.title.trim()}\n${n.body.trim()}`);
+  if (n.te_status === "reviewed") return { state: "kept", reason: "reviewed" };
+  if (n.te_status === "auto" && n.body_te && n.te_src_hash === hash) return { state: "kept", reason: "unchanged" };
+  if (hasTelugu(n.title) || hasTelugu(n.body)) return { state: "kept", reason: "has_telugu" };
+  const deps = { purpose: "notice" as const, provider: getProvider(), store: dbStore() };
+  try {
+    const t = await translateToTelugu(n.title, deps);
+    if (!t.ok) return { state: "pending", reason: t.reason };
+    const b = await translateToTelugu(n.body, deps);
+    if (!b.ok) return { state: "pending", reason: b.reason };
+    const { data: applied } = await db.rpc("apply_notice_translation", { p_notice: n.id, p_title_te: t.te, p_body_te: b.te, p_hash: hash });
+    return applied ? { state: "translated" } : { state: "pending", reason: "changed" };
+  } catch {
+    return { state: "pending", reason: "failed" };
+  }
+}
+
+/** For the editor's "Translate to Telugu" button: translate unsaved text; the office then reviews it. */
+export async function translateNoticeText(title: string, body: string): Promise<{ ok: true; titleTe: string; bodyTe: string } | { ok: false; reason: string }> {
+  const deps = { purpose: "notice" as const, provider: getProvider(), store: dbStore() };
+  try {
+    const t = await translateToTelugu(title, deps);
+    if (!t.ok) return { ok: false, reason: t.reason };
+    const b = await translateToTelugu(body, deps);
+    if (!b.ok) return { ok: false, reason: b.reason };
+    return { ok: true, titleTe: t.te, bodyTe: b.te };
+  } catch {
+    return { ok: false, reason: "failed" };
+  }
+}

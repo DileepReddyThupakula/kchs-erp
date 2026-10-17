@@ -87,6 +87,16 @@ export function SettingsForm({ settings: s, editable }: { settings: SchoolSettin
         </Field>
       </Card>
       <Card className="grid gap-4 sm:grid-cols-2">
+        <h2 className="font-medium sm:col-span-2">WhatsApp group labels</h2>
+        {text("staff_group_name", "Staff WhatsApp group name", "Only a label in the notice send checklist, e.g. “KCHS staff group”. Class parent groups are named under Classes & sections.")}
+      </Card>
+      <Card className="grid gap-4 sm:grid-cols-2">
+        <h2 className="font-medium sm:col-span-2">Exams</h2>
+        <Field label="Default pass mark (%)" name="default_pass_percent" hint="A subject passes at this percentage unless its own pass mark is set on the Exams → Scheme tab (for example Hindi)." errors={fe.default_pass_percent}>
+          <Input id="default_pass_percent" name="default_pass_percent" type="number" min={0} max={100} step="0.5" defaultValue={s.default_pass_percent ?? 35} disabled={!editable} />
+        </Field>
+      </Card>
+      <Card className="grid gap-4 sm:grid-cols-2">
         <h2 className="font-medium sm:col-span-2">Diary</h2>
         <Field label="Diary submission deadline" name="diary_deadline" hint="Teachers submit their subject's diary before this time. Classes still incomplete after it are flagged late." errors={fe.diary_deadline}>
           <Input id="diary_deadline" name="diary_deadline" type="time" defaultValue={(s.diary_deadline ?? "15:30").slice(0, 5)} disabled={!editable} />

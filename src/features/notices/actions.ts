@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability, requireStaff } from "@/lib/auth/session";
-import { translateDiaryEntry, REASON_TEXT } from "@/lib/translate/service";
+import { translateDiaryEntry, translateNotice, translateNoticeText, REASON_TEXT } from "@/lib/translate/service";
 import { ATTACH_MAX, ATTACH_TYPES } from "./shared";
 
 const uuid = z.string().uuid();
@@ -70,7 +70,9 @@ const noticeSchema = z.object({
   id: uuid.optional(),
   title: z.string().trim().min(3, "Give the notice a title"),
   body: z.string().trim().min(2, "Write the notice text"),
-  audience: z.enum(["all", "roles", "classes", "teachers"]),
+  titleTe: z.string().trim().optional(),
+  bodyTe: z.string().trim().optional(),
+  audience: z.enum(["all", "roles", "classes", "teachers", "parents_all", "parents_classes"]),
   roles: z.array(z.enum(["admin", "teacher"])).default([]),
   classIds: z.array(uuid).default([]),
   staffIds: z.array(uuid).default([]),
@@ -86,17 +88,24 @@ export async function saveNotice(input: z.input<typeof noticeSchema>, publish: b
   const v = p.data;
   const supabase = await createClient();
   const { data: id, error } = await supabase.rpc("save_notice", {
-    p: { id: v.id ?? null, title: v.title, body: v.body, audience: v.audience, roles: v.roles, class_ids: v.classIds, staff_ids: v.staffIds, publish_date: v.publishDate ?? null, expires_on: v.expiresOn ?? null, important: v.important },
+    p: { id: v.id ?? null, title: v.title, body: v.body, title_te: v.titleTe || null, body_te: v.bodyTe || null, audience: v.audience, roles: v.roles, class_ids: v.classIds, staff_ids: v.staffIds, publish_date: v.publishDate ?? null, expires_on: v.expiresOn ?? null, important: v.important },
   });
   if (error) return fail(msg(error));
   let circularNo: string | null = null;
+  let note = "";
   if (publish) {
     const r = await supabase.rpc("publish_notice", { p_id: id });
     if (r.error) return fail(msg(r.error));
     circularNo = r.data;
   }
+  // Telugu is generated on publish (and again if the English of a published notice changed); never over reviewed Telugu
+  const { data: st } = await supabase.from("notices").select("status, te_status").eq("id", id).single();
+  if (st?.status === "published" && st.te_status === "pending") {
+    const t = await translateNotice(id);
+    if (t.state === "pending") note = " Telugu translation is pending: translate it from the notice page or type it.";
+  }
   refresh();
-  return { ok: true, id, circularNo, message: publish ? `Published as ${circularNo}.` : "Saved as a draft." };
+  return { ok: true, id, circularNo, message: (publish ? `Published as ${circularNo}.` : "Saved as a draft.") + note };
 }
 
 export async function publishNotice(id: string): Promise<NtResult<{ circularNo: string }>> {
@@ -105,8 +114,9 @@ export async function publishNotice(id: string): Promise<NtResult<{ circularNo: 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("publish_notice", { p_id: id });
   if (error) return fail(msg(error));
+  const t = await translateNotice(id);
   refresh();
-  return { ok: true, circularNo: data, message: `Published as ${data}.` };
+  return { ok: true, circularNo: data, message: `Published as ${data}.${t.state === "pending" ? " Telugu translation is pending." : ""}` };
 }
 
 export async function archiveNotice(id: string, archive: boolean): Promise<NtResult> {
@@ -310,4 +320,44 @@ export async function retryTranslation(input: { entryId?: string; sectionId?: st
   refresh();
   const left = ids.length - done;
   return { ok: true, done, left, message: left ? `${done} translated, ${left} still pending (${why || "try again later, or type the Telugu"}).` : `${done} line(s) translated.` };
+}
+
+// ------------------------------------------------------------------ notices: Telugu and WhatsApp
+/** The editor's "Translate to Telugu" button: fills the Telugu boxes; the office reviews and edits before saving. */
+export async function translateNoticeDraft(input: { title: string; body: string }): Promise<NtResult<{ titleTe: string; bodyTe: string }>> {
+  await requireCapability("notices.edit");
+  if (input.title.trim().length < 3 || input.body.trim().length < 2) return fail("Write the English title and text first.");
+  const r = await translateNoticeText(input.title, input.body);
+  if (!r.ok) return fail(`Could not translate: ${REASON_TEXT[r.reason] ?? r.reason}. You can type the Telugu yourself.`);
+  return { ok: true, titleTe: r.titleTe, bodyTe: r.bodyTe, message: "Translated. Please read it and correct anything before saving." };
+}
+
+export async function retryNoticeTranslation(id: string): Promise<NtResult> {
+  await requireCapability("notices.edit");
+  if (!uuid.safeParse(id).success) return fail("Invalid notice.");
+  const t = await translateNotice(id);
+  refresh();
+  if (t.state === "pending") return fail(`Still pending: ${REASON_TEXT[t.reason ?? ""] ?? "try again later, or type the Telugu"}.`);
+  return { ok: true, message: t.state === "translated" ? "Translated." : "Nothing to translate." };
+}
+
+/** "Open WhatsApp" for one group of a notice: recorded (and logged) as OPENED, never as delivered. */
+export async function openNoticeSend(noticeId: string, key: string, channel: "app" | "web" | "share"): Promise<NtResult> {
+  await requireCapability("notices.edit");
+  if (!uuid.safeParse(noticeId).success) return fail("Invalid notice.");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("notice_send_open", { p_notice: noticeId, p_key: key, p_channel: channel });
+  if (error) return fail(msg(error));
+  refresh();
+  return { ok: true };
+}
+
+export async function markNoticeSend(noticeId: string, key: string, sent: boolean): Promise<NtResult> {
+  await requireCapability("notices.edit");
+  if (!uuid.safeParse(noticeId).success) return fail("Invalid notice.");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("notice_send_mark", { p_notice: noticeId, p_key: key, p_sent: sent });
+  if (error) return fail(msg(error));
+  refresh();
+  return { ok: true, message: sent ? "Marked as sent." : "Mark removed." };
 }

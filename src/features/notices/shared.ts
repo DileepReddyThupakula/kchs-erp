@@ -1,6 +1,16 @@
 /** Pure helpers for Notices and Diary (server + client). */
-export const AUDIENCE_LABEL = { all: "All staff", roles: "Selected roles", classes: "Selected classes", teachers: "Specific teachers" } as const;
+export const AUDIENCE_LABEL = {
+  all: "All staff",
+  roles: "Selected roles",
+  classes: "Teachers of selected classes",
+  teachers: "Specific teachers",
+  parents_all: "Parents and students: whole school",
+  parents_classes: "Parents and students: selected classes",
+} as const;
 export type Audience = keyof typeof AUDIENCE_LABEL;
+/** Notices written for parents: shared by print or WhatsApp only. Parents never log in. */
+export const isParentsAudience = (a: string) => a === "parents_all" || a === "parents_classes";
+export const PARENTS_TO = "Parents and students";
 
 export const ROLE_OPTIONS = [
   { value: "admin", label: "Admin" },
@@ -35,20 +45,19 @@ export function diaryWhatsApp(opts: { school: string; classLabel: string; date: 
   return out.join("\n");
 }
 
-/** A circular as plain text for WhatsApp. */
-export function noticeWhatsApp(n: { school: string; circularNo: string | null; date: string; title: string; body: string; audienceLine: string }) {
-  return [
-    `*${n.school}*`,
-    n.circularNo ? `Circular No: ${n.circularNo}` : "Circular (draft)",
-    `Date: ${fmtShort(n.date)}`,
-    "",
-    `*${n.title}*`,
-    "",
-    n.body.trim(),
-    "",
-    `For: ${n.audienceLine}`,
-    "- Principal",
-  ].join("\n");
+/**
+ * A circular as WhatsApp text: English first, then Telugu (when there is Telugu), clearly separated.
+ * No file names or paths, no student names, no signature.
+ */
+export function noticeWhatsApp(n: { school: string; circularNo: string | null; date: string; title: string; body: string; titleTe?: string | null; bodyTe?: string | null; audienceLine: string }) {
+  const out = [`*${n.school}*`, n.circularNo ? `Circular No: ${n.circularNo}` : "Circular (draft)", `Date: ${fmtShort(n.date)}`, "", `*${n.title}*`, "", n.body.trim()];
+  if (n.titleTe || n.bodyTe) {
+    out.push("", "──────────", "*తెలుగు*");
+    if (n.titleTe) out.push(`*${n.titleTe}*`, "");
+    if (n.bodyTe) out.push(n.bodyTe.trim());
+  }
+  out.push("", `To: ${n.audienceLine}`, "- Principal");
+  return out.join("\n");
 }
 
 export type NoticeStateName = "draft" | "scheduled" | "active" | "expired" | "archived";

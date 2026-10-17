@@ -28,6 +28,13 @@ const sha = (s: string) => createHash("sha256").update(s.trim().replace(/\s+/g, 
 /** numbers, exercise / page numbers and ranges: "5.1", "1-6", "10:30", "20" */
 const NUMBER = /\d+(?:[.,:/\-–]\d+)*/g;
 export const numberTokens = (s: string) => s.match(NUMBER) ?? [];
+const norm = (t: string) => t.replace(/–/g, "-");
+/** Same numbers, same number of times. Telugu word order differs from English, so the ORDER may change. */
+export function sameNumbers(a: string, b: string): boolean {
+  const x = numberTokens(a).map(norm).sort();
+  const y = numberTokens(b).map(norm).sort();
+  return x.length === y.length && x.every((t, i) => t === y[i]);
+}
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 function unesc(s: string) {
@@ -72,7 +79,7 @@ export async function translateToTelugu(text: string, o: { purpose: string; prov
     return { ok: false, reason: "failed" };
   }
   if (!te || !hasTelugu(te)) return { ok: false, reason: "failed" };
-  if (numberTokens(src).join("|") !== numberTokens(te).join("|")) return { ok: false, reason: "validation" };
+  if (!sameNumbers(src, te)) return { ok: false, reason: "validation" };
   await o.store.cachePut(key, te, src.length);
   return { ok: true, te, cached: false };
 }

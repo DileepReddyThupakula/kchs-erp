@@ -35,7 +35,7 @@ export default async function SettingsPage() {
           <Card>
             <h2 className="mb-2 font-semibold text-navy-900">Translation status</h2>
             <dl className="space-y-1 text-sm">
-              <div className="flex justify-between gap-2"><dt className="text-muted">Service</dt><dd className="font-medium">{provider ? `${provider === "mock" ? "Test (fake Telugu)" : provider === "azure" ? "Azure Translator" : "Google Cloud Translation"} · connected` : "Not set up (type Telugu by hand)"}</dd></div>
+              <div className="flex justify-between gap-2"><dt className="text-muted">Service</dt><dd className="font-medium">{provider ? `${provider === "mock" ? "Test (fake Telugu)" : provider === "gemini" ? "Gemini" : provider === "azure" ? "Azure Translator" : "Google Cloud Translation"} · connected` : "Not set up (type Telugu by hand)"}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-muted">This month</dt><dd className="font-medium tabular-nums">{used.toLocaleString("en-IN")} of {cap.toLocaleString("en-IN")}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-muted">Used</dt><dd className={`font-medium ${pct >= 100 ? "text-red-700" : pct >= 80 ? "text-amber-800" : ""}`}>{pct}%{pct >= 100 ? " · switched off until next month" : pct >= 80 ? " · nearly at the limit" : ""}</dd></div>
             </dl>

@@ -20,23 +20,17 @@ export default async function NoticesPage() {
   const today = todayIst();
   const { data: notices } = await supabase.from("notices").select("*").order("publish_date", { ascending: false }).order("created_at", { ascending: false }).limit(500);
   const list = notices ?? [];
-  const [audience, { data: reads }] = await Promise.all([
+  const [audience, { data: reads }, rc, sc] = await Promise.all([
     getAudienceText(supabase, list),
     supabase.from("notice_reads").select("notice_id").eq("staff_id", me.staffId),
+    isAdmin ? supabase.rpc("notice_read_counts") : Promise.resolve({ data: null }),
+    canEdit ? supabase.rpc("notice_send_counts") : Promise.resolve({ data: null }),
   ]);
   const mine = new Set((reads ?? []).map((r) => r.notice_id));
   const counts = new Map<string, { read: number; total: number }>();
-  if (isAdmin) {
-    await Promise.all(
-      list
-        .filter((n) => n.status === "published" && !n.archived_at)
-        .slice(0, 80)
-        .map(async (n) => {
-          const { data } = await supabase.rpc("notice_readers", { p_notice: n.id });
-          counts.set(n.id, { read: (data ?? []).filter((r) => r.read_at).length, total: (data ?? []).length });
-        }),
-    );
-  }
+  (rc.data ?? []).forEach((c) => counts.set(c.notice_id, { read: c.read_count, total: c.total }));
+  const sendCounts = new Map<string, { sent: number; total: number }>();
+  (sc.data ?? []).forEach((c) => sendCounts.set(c.notice_id, { sent: c.sent, total: c.total }));
   const rows: NoticeItem[] = list.map((n) => ({
     id: n.id,
     title: n.title,
@@ -50,6 +44,7 @@ export default async function NoticesPage() {
     readCount: counts.get(n.id)?.read ?? null,
     total: counts.get(n.id)?.total ?? null,
     iRead: mine.has(n.id),
+    sends: sendCounts.get(n.id) ?? null,
   }));
   return (
     <>

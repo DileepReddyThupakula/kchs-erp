@@ -88,8 +88,13 @@ export async function getAudienceText(supabase: Supa, notices: { id: string; aud
       out.set(n.id, "All staff");
       continue;
     }
+    if (n.audience === "parents_all") {
+      out.set(n.id, "Parents and students");
+      continue;
+    }
     const mine = (rows ?? []).filter((r) => r.notice_id === n.id);
     if (n.audience === "roles") out.set(n.id, mine.map((r) => (r.role === "teacher" ? "Teachers" : r.role === "admin" ? "Admin" : "Staff")).join(", "));
+    else if (n.audience === "parents_classes") out.set(n.id, "Parents and students of " + mine.map((r) => cn.get(r.class_id ?? "") ?? "a class").join(", "));
     else if (n.audience === "classes") out.set(n.id, "Teachers of " + mine.map((r) => cn.get(r.class_id ?? "") ?? "a class").join(", "));
     else out.set(n.id, mine.map((r) => sn.get(r.staff_id ?? "") ?? "a teacher").join(", "));
   }

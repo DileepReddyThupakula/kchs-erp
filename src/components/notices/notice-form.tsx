@@ -2,19 +2,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Languages } from "lucide-react";
 import { Badge, Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/form";
 import { AttachmentsPanel } from "@/components/notices/attachments-panel";
-import { saveNotice } from "@/features/notices/actions";
-import { AUDIENCE_LABEL, ROLE_OPTIONS, fmtShort, type Audience } from "@/features/notices/shared";
+import { saveNotice, translateNoticeDraft } from "@/features/notices/actions";
+import { CircularSheet, type CircularSchool } from "@/components/notices/circular-sheet";
+import { AUDIENCE_LABEL, PARENTS_TO, ROLE_OPTIONS, fmtLong, isParentsAudience, type Audience } from "@/features/notices/shared";
 import type { FileLink } from "@/features/notices/queries";
 
 export type NoticeDraft = {
   id: string | null;
   title: string;
   body: string;
+  titleTe: string;
+  bodyTe: string;
+  teStatus: "none" | "pending" | "auto" | "reviewed";
   audience: Audience;
   roles: string[];
   classIds: string[];
@@ -27,19 +31,25 @@ export type NoticeDraft = {
 };
 
 /** Create / edit a notice with a live preview of the circular. */
-export function NoticeForm({ initial, classes, teachers, files, school, today }: { initial: NoticeDraft; classes: { id: string; name: string }[]; teachers: { id: string; name: string; designation: string }[]; files: FileLink[]; school: string; today: string }) {
+export function NoticeForm({ initial, classes, teachers, files, school, today }: { initial: NoticeDraft; classes: { id: string; name: string }[]; teachers: { id: string; name: string; designation: string }[]; files: FileLink[]; school: CircularSchool; today: string }) {
   const router = useRouter();
   const [v, setV] = useState(initial);
   const [preview, setPreview] = useState(true);
   const [find, setFind] = useState("");
   const [busy, setBusy] = useState<"" | "save" | "publish">("");
   const [error, setError] = useState("");
+  const [translating, setTranslating] = useState(false);
   const set = <K extends keyof NoticeDraft>(k: K, val: NoticeDraft[K]) => setV((x) => ({ ...x, [k]: val }));
   const toggle = (k: "roles" | "classIds" | "staffIds", id: string) => set(k, v[k].includes(id) ? v[k].filter((x) => x !== id) : [...v[k], id]);
   const published = v.status === "published";
 
+  const classNames = v.classIds.map((id) => classes.find((c) => c.id === id)?.name).filter(Boolean).join(", ");
   const audienceLine =
-    v.audience === "all"
+    v.audience === "parents_all"
+      ? PARENTS_TO
+      : v.audience === "parents_classes"
+        ? `${PARENTS_TO} of ${classNames || "—"}`
+        : v.audience === "all"
       ? "All staff"
       : v.audience === "roles"
         ? v.roles.map((r) => ROLE_OPTIONS.find((o) => o.value === r)?.label ?? r).join(", ") || "—"
@@ -51,7 +61,7 @@ export function NoticeForm({ initial, classes, teachers, files, school, today }:
     setError("");
     setBusy(publish ? "publish" : "save");
     const r = await saveNotice(
-      { id: v.id ?? undefined, title: v.title, body: v.body, audience: v.audience, roles: v.roles as ("admin" | "teacher")[], classIds: v.classIds, staffIds: v.staffIds, publishDate: v.publishDate || undefined, expiresOn: v.expiresOn || null, important: v.important },
+      { id: v.id ?? undefined, title: v.title, body: v.body, titleTe: v.titleTe, bodyTe: v.bodyTe, audience: v.audience, roles: v.roles as ("admin" | "teacher")[], classIds: v.classIds, staffIds: v.staffIds, publishDate: v.publishDate || undefined, expiresOn: v.expiresOn || null, important: v.important },
       publish,
     );
     setBusy("");
@@ -60,6 +70,16 @@ export function NoticeForm({ initial, classes, teachers, files, school, today }:
     if (!v.id) router.replace(`/notices/${r.id}/edit`);
     else router.refresh();
     if (publish) router.push(`/notices/${r.id}`);
+  }
+
+  async function translate() {
+    setError("");
+    setTranslating(true);
+    const r = await translateNoticeDraft({ title: v.title, body: v.body });
+    setTranslating(false);
+    if (!r.ok) return setError(r.error);
+    setV((x) => ({ ...x, titleTe: r.titleTe, bodyTe: r.bodyTe }));
+    toast.success(r.message ?? "Translated.");
   }
 
   return (
@@ -72,6 +92,29 @@ export function NoticeForm({ initial, classes, teachers, files, school, today }:
           <Field label="Text" name="n-body" hint="Plain text. Press Enter for a new line; leave a blank line between paragraphs.">
             <Textarea id="n-body" rows={9} value={v.body} onChange={(e) => set("body", e.target.value)} />
           </Field>
+          <div className="rounded-lg border border-border p-3">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold text-navy-900">Telugu (తెలుగు) — optional</h3>
+              {v.teStatus === "auto" && <Badge tone="info">Auto-translated</Badge>}
+              {v.teStatus === "reviewed" && <Badge tone="success">Reviewed</Badge>}
+              <span className="flex-1" />
+              <Button type="button" variant="secondary" size="sm" loading={translating} disabled={v.title.trim().length < 3 || v.body.trim().length < 2} onClick={translate}>
+                <Languages className="size-4" /> Translate to Telugu
+              </Button>
+            </div>
+            <div className="space-y-3">
+              <Field label="Title in Telugu" name="n-title-te">
+                <Input id="n-title-te" lang="te" value={v.titleTe} onChange={(e) => set("titleTe", e.target.value)} />
+              </Field>
+              <Field label="Text in Telugu" name="n-body-te">
+                <Textarea id="n-body-te" rows={7} lang="te" value={v.bodyTe} onChange={(e) => set("bodyTe", e.target.value)} />
+              </Field>
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              Leave it empty and the Telugu is added automatically when you publish. Anything you type or correct here is kept as “Reviewed” and never overwritten.
+              To type Telugu: switch your keyboard to Telugu (on a phone: Settings → Keyboard → add Telugu; on a computer use Google Input Tools or the Telugu keyboard of your system), or paste text. Please have a Telugu speaker check translated text.
+            </p>
+          </div>
           <label className="flex items-center gap-2 text-sm font-medium text-navy-900">
             <input type="checkbox" className="size-4 accent-navy-700" checked={v.important} onChange={(e) => set("important", e.target.checked)} />
             Important (pinned at the top of the dashboards until it expires)
@@ -96,9 +139,14 @@ export function NoticeForm({ initial, classes, teachers, files, school, today }:
               ))}
             </div>
           )}
-          {v.audience === "classes" && (
+          {isParentsAudience(v.audience) && (
+            <p className="rounded-lg bg-gold-50 p-2 text-xs text-navy-900">
+              For parents and students. Parents have no login: this notice is shared only by print or WhatsApp (send checklist after publishing). It is also shown, read only and marked “Sent to parents”, to the office and the teachers of those classes. Do not put student names in it.
+            </p>
+          )}
+          {(v.audience === "classes" || v.audience === "parents_classes") && (
             <div>
-              <p className="mb-1 text-xs text-muted">The notice reaches the teachers (class teachers and subject teachers) of these classes.</p>
+              <p className="mb-1 text-xs text-muted">{v.audience === "classes" ? "The notice reaches the teachers (class teachers and subject teachers) of these classes." : "Parents of the students of these classes (one WhatsApp group per section)."}</p>
               <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                 {classes.map((c) => (
                   <label key={c.id} className="inline-flex items-center gap-1.5 text-sm">
@@ -173,24 +221,12 @@ export function NoticeForm({ initial, classes, teachers, files, school, today }:
           <p className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
             Preview {v.important && <Badge tone="gold">Important</Badge>}
           </p>
-          <div className="rounded-lg border-2 border-navy-900 bg-white p-4 text-black shadow-sm" style={{ outline: "1px solid #b8962e", outlineOffset: "-5px" }}>
-            <p className="border-b border-black pb-1 text-center font-display text-sm font-bold uppercase tracking-wide text-navy-950">{school}</p>
-            <div className="mt-2 flex justify-between text-xs">
-              <span>
-                <b>Circular No:</b> {v.circularNo ?? "(given when published)"}
-              </span>
-              <span>
-                <b>Date:</b> {fmtShort(v.publishDate || today)}
-              </span>
+          <div className="overflow-auto rounded-lg border border-border bg-neutral-100 p-2" style={{ maxHeight: "70vh" }}>
+            <div style={{ width: "calc(210mm * 0.42)", height: "calc(297mm * 0.42)", overflow: "hidden" }}>
+              <div style={{ width: "210mm", transform: "scale(0.42)", transformOrigin: "top left" }}>
+              <CircularSheet data={{ school, circularNo: v.circularNo, dateLong: fmtLong(v.publishDate || today), toLine: audienceLine, title: v.title || "Title", body: v.body || "The notice text appears here.", titleTe: v.titleTe || null, bodyTe: v.bodyTe || null, draft: v.status === "draft" }} layout="a4" />
+              </div>
             </div>
-            <h3 className="my-3 text-center text-sm font-bold uppercase underline">{v.title || "Title"}</h3>
-            <p className="whitespace-pre-wrap text-xs leading-relaxed">{v.body || "The notice text appears here."}</p>
-            <p className="mt-4 text-xs">
-              <b>To:</b> {audienceLine}
-            </p>
-            <p className="mt-10 text-right text-xs">
-              <span className="inline-block w-28 border-t border-black pt-0.5 text-center">Principal</span>
-            </p>
           </div>
         </aside>
       )}
