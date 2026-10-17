@@ -9,6 +9,8 @@ import { getDailyRows, getLowThreshold } from "@/features/attendance/queries";
 import { DAY_MARK, fmtDays, monthLabel, monthRange, dayOfWeek } from "@/features/attendance/shared";
 import { getSectionsInfo } from "@/features/timetable/queries";
 import { todayIst } from "@/features/fees/shared";
+import { printFooterText } from "@/features/reports/shared";
+import { formatDate } from "@/lib/utils";
 
 export const metadata = { title: "Attendance report" };
 
@@ -27,6 +29,9 @@ export default async function PrintAttendance({ params, searchParams }: { params
   const all = await getSectionsInfo(supabase, year.id);
   const sections = isAny ? all : all.filter((s) => s.classTeacherId === me.staffId);
   const today = todayIst();
+  const footer = printFooterText(formatDate(today), me.fullName);
+  // opening a print is the print: it is written to the audit log (who, which report, filters)
+  await supabase.rpc("log_report", { p_report: `attendance-${kind}`, p_format: "print", p_filters: JSON.parse(JSON.stringify(sp)) });
 
   if (kind === "register") {
     const section = sections.find((s) => s.id === sp.section);
@@ -54,6 +59,7 @@ export default async function PrintAttendance({ params, searchParams }: { params
     ]);
     return (
       <ReportPrintSheet
+        footer={footer}
         school={school}
         title="MONTHLY ATTENDANCE REGISTER"
         subtitle={`${section.label} · ${monthLabel(month)}`}
@@ -75,6 +81,7 @@ export default async function PrintAttendance({ params, searchParams }: { params
     const unmarked = (data ?? []).reduce((a, r) => a + r.unmarked_sessions, 0);
     return (
       <ReportPrintSheet
+        footer={footer}
         school={school}
         title="ATTENDANCE SUMMARY (DAYS)"
         subtitle={`${section.label} · ${from} to ${to}`}
@@ -97,6 +104,7 @@ export default async function PrintAttendance({ params, searchParams }: { params
     rows.sort((a, b) => parseFloat(String(a[3])) - parseFloat(String(b[3])));
     return (
       <ReportPrintSheet
+        footer={footer}
         school={school}
         title="LOW ATTENDANCE LIST"
         subtitle={`Below ${threshold}% · ${range === "year" ? `${year.name} to date` : monthLabel(today.slice(0, 7))}`}

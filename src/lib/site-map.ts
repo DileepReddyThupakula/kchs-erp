@@ -136,7 +136,12 @@ export const PAGES: PageDef[] = [
   { path: "/staff/leave", name: "Leave", icon: FileClock, module: "attendance", status: "built", access: { admin: true }, menu: { admin: "Staff" }, description: "Staff leave requests, approvals and balances (approval is Admin only)." },
 
   // ---------------------------------------------------------------- reports
-  { path: "/reports", name: "Reports", icon: BarChart3, module: "reports", status: "planned", access: { admin: true }, menu: { admin: "Reports" }, description: "Attendance %, class strength, fee collection, defaulters and results analysis." },
+  { path: "/reports", name: "Reports", icon: BarChart3, module: "reports", status: "built", access: { admin: true, teacher: true }, menu: { admin: "Reports", teacher: "My work" }, description: "Every report you may open, with Excel / CSV export and A4 print (all logged).", teacherDescription: "The reports for your own sections and subjects." },
+  { path: "/reports/strength", name: "Students: strength and demographics", icon: Users, module: "reports", status: "built", access: { admin: true, teacher: true }, menu: {}, description: "Strength by section; demographics, admissions and leavers for Admin and student records.", teacherDescription: "The strength of your own sections." },
+  { path: "/reports/fees", name: "Fee summary", icon: BadgeIndianRupee, module: "reports", status: "built", access: { admin: true, duty: "fee_collection" }, menu: {}, description: "Dues by class, collection by month and concessions by fee head. Admin and office staff with fee access only." },
+  { path: "/reports/exams", name: "Results summary", icon: BookOpenCheck, module: "reports", status: "built", access: { admin: true, teacher: true }, menu: {}, description: "Pass, fail and incomplete per section; subject averages.", teacherDescription: "How your own subjects and sections did." },
+  { path: "/reports/staff", name: "Staff attendance summary", icon: UserCheck, module: "reports", status: "built", access: { admin: true }, menu: {}, description: "Present, late, absent and on-leave days per staff member for a period." },
+  { path: "/reports/my-load", name: "My timetable and duties", icon: CalendarClock, module: "reports", status: "built", access: { teacher: true }, menu: {}, description: "Your own periods, substitutions and leave." },
   { path: "/reports/government-export", name: "Government data export", icon: ShieldCheck, module: "students", status: "built", access: { admin: true }, menu: { admin: "Reports" }, description: "UDISE+ / AP Child Info format export. IDs masked unless Admin chooses otherwise; every export is logged." },
 
   // ---------------------------------------------------------------- school setup

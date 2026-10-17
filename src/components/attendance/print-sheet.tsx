@@ -10,6 +10,7 @@ export function ReportPrintSheet({
   rows,
   note,
   compact,
+  footer,
 }: {
   school: { name: string; address: string; phone: string | null; logoUrl: string };
   title: string;
@@ -18,10 +19,12 @@ export function ReportPrintSheet({
   rows: (string | number)[][];
   note?: string;
   compact?: boolean;
+  /** "Printed on … by … · Confidential - for school use": repeated at the bottom of every printed page */
+  footer: string;
 }) {
   return (
     <div className="min-h-screen bg-neutral-100 p-4 print:bg-white print:p-0">
-      <style>{`@page { size: A4 landscape; margin: 10mm; } @media print { body { background: #fff !important; } thead { display: table-header-group; } tr { break-inside: avoid; } }`}</style>
+      <style>{`@page { size: A4 landscape; margin: 10mm; } @media print { body { background: #fff !important; } thead { display: table-header-group; } tr { break-inside: avoid; } article { box-shadow: none !important; } .print-frame { width: 100%; border-collapse: collapse; } .print-frame > thead, .print-frame > tbody, .print-frame > tfoot { border: 0; } .print-frame > tfoot { display: table-footer-group; } .print-frame > tbody > tr, .print-frame > tfoot > tr { break-inside: auto; } }`}</style>
       <div className="mx-auto mb-4 flex max-w-[277mm] items-center justify-between gap-2 print:hidden">
         <p className="text-xs text-muted">Choose “Save as PDF” in the print window to get a PDF file. Paper: A4 landscape.</p>
         <button type="button" onClick={() => window.print()} className="inline-flex h-10 items-center gap-2 rounded-lg bg-navy-700 px-4 text-sm font-medium text-white shadow-sm hover:bg-navy-800">
@@ -29,6 +32,10 @@ export function ReportPrintSheet({
         </button>
       </div>
       <article className="mx-auto bg-white p-[8mm] text-black shadow-md print:shadow-none" style={{ width: "277mm", border: "2px solid #011a37", outline: "1px solid #b8962e", outlineOffset: "-5px" }}>
+        <table className="print-frame">
+          <tbody>
+            <tr>
+              <td className="p-0 align-top">
         <header className="flex items-center gap-4 border-b border-black pb-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={school.logoUrl} alt="" className="size-[18mm] shrink-0 object-contain" />
@@ -76,6 +83,18 @@ export function ReportPrintSheet({
         </table>
         {note && <p className="mt-2 text-[8.5pt]">{note}</p>}
         <p className="mt-3 text-center text-[8pt]">This is a computer-generated report</p>
+              </td>
+            </tr>
+          </tbody>
+          {/* repeated at the bottom of every printed page (a table footer repeats on each page, so it never overlaps the rows) */}
+          <tfoot>
+            <tr>
+              <td className="p-0 pt-2">
+                <p className="report-footer text-center text-[8pt] text-neutral-700" data-testid="print-footer">{footer}</p>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </article>
     </div>
   );

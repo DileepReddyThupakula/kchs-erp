@@ -150,11 +150,11 @@ select pg_temp.throws($$select public.report_my_load('2f000000-0000-4000-fb00-00
 -- ================= logging of exports and prints
 select pg_temp.login_as('00000000-0000-4000-fb00-000000000002');
 select pg_temp.lives($$select public.log_report('strength', 'csv', '{"year": "RP"}', 12)$$, 'a teacher logs the export of their own report');
-select pg_temp.lives($$select public.log_report('strength', 'print', '{}', 12)$$, 'and a print');
+select pg_temp.lives($$select public.log_report('strength', 'print', '{"year": "RP"}', 12)$$, 'and a print');
 select pg_temp.throws($$select public.log_report('strength', 'whatsapp', '{}', 1)$$, 'sharing by WhatsApp is not a report format', '23514');
 select pg_temp.login_as('00000000-0000-4000-fb00-000000000001');
 select pg_temp.counts($$select count(*) from public.audit_logs where action = 'report.export' and details ->> 'report' = 'strength' and details ->> 'format' = 'csv' and details -> 'filters' ->> 'year' = 'RP' and (details ->> 'rows')::int = 12 and actor_role = 'teacher'$$, 1, 'the export is in the audit log: who (role), which report, format, filters, rows');
-select pg_temp.counts($$select count(*) from public.audit_logs where action = 'report.print' and details ->> 'report' = 'strength'$$, 1, 'the print is in the audit log');
+select pg_temp.counts($$select count(*) from public.audit_logs where action = 'report.print' and details ->> 'report' = 'strength' and details -> 'filters' ->> 'year' = 'RP'$$, 1, 'the print is in the audit log');
 select pg_temp.login_as(null);
 select pg_temp.throws($$select public.log_report('strength', 'csv')$$, 'anonymous cannot log', '42501');
 
