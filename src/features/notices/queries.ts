@@ -21,7 +21,8 @@ export type DiaryRow = {
   subjectId: string | null;
   subject: string | null;
   body: string;
-  status: "draft" | "published";
+  bodyTe: string;
+  status: "draft" | "submitted" | "published";
   archived: boolean;
   sectionIds: string[];
   sections: string; // "Class 6 – A, Class 6 – B"
@@ -36,7 +37,7 @@ export async function getDiaryRows(
   const entries = await fetchAll((f, t) =>
     supabase
       .from("diary_entries")
-      .select("id, entry_date, subject_id, body, status, archived_at, created_by")
+      .select("id, entry_date, subject_id, body, body_te, status, archived_at, created_by")
       .gte("entry_date", opts.from)
       .lte("entry_date", opts.to)
       .order("entry_date", { ascending: false })
@@ -59,6 +60,7 @@ export async function getDiaryRows(
       subjectId: e.subject_id,
       subject: e.subject_id ? (opts.subjects[e.subject_id] ?? null) : null,
       body: e.body,
+      bodyTe: e.body_te ?? "",
       status: e.status,
       archived: !!e.archived_at,
       sectionIds: ids,
@@ -100,4 +102,10 @@ export async function getSubjectNameMap(supabase: Supa): Promise<Record<string, 
   if (!r.error) return Object.fromEntries((r.data ?? []).map((s) => [s.id, s.name]));
   const { data } = await supabase.from("subjects").select("id, name");
   return Object.fromEntries((data ?? []).map((s) => [s.id, s.name]));
+}
+
+/** Subject id -> Telugu name (set under Subjects; may be empty). */
+export async function getSubjectTeMap(supabase: Supa): Promise<Record<string, string>> {
+  const r = await supabase.rpc("subject_names");
+  return Object.fromEntries((r.data ?? []).filter((s) => s.name_te).map((s) => [s.id, s.name_te as string]));
 }

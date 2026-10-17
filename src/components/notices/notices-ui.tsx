@@ -87,7 +87,7 @@ export function NoticesTable({ rows, canEdit, isAdmin }: { rows: NoticeItem[]; c
       rowActions={(r) => [
         { id: "view", kind: "view", label: "Open", icon: Eye, href: `/notices/${r.id}` },
         ...(canEdit && r.state !== "archived" ? [{ id: "edit", kind: "edit" as const, label: "Edit", href: `/notices/${r.id}/edit` }] : []),
-        { id: "print", kind: "menu", label: "Print circular", icon: Printer, href: `/print/notice/${r.id}` },
+        ...(canEdit ? [{ id: "print", kind: "menu" as const, label: "Print circular", icon: Printer, href: `/print/notice/${r.id}` }] : []),
         ...(canEdit && r.state === "draft" ? [{ id: "publish", kind: "menu" as const, label: "Publish", icon: Send, onClick: () => void run(publishNotice(r.id)) }] : []),
         ...(isAdmin
           ? [
@@ -132,22 +132,26 @@ export function NoticeActions({ id, state, canEdit, isAdmin, iRead, whatsapp }: 
           <Pencil className="size-4" aria-hidden /> Edit
         </Link>
       )}
-      <Link href={`/print/notice/${id}`} target="_blank" className={buttonClasses("secondary")}>
-        <Printer className="size-4" aria-hidden /> Print circular
-      </Link>
-      <Button
-        variant="secondary"
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(whatsapp);
-            toast.success("Copied. Paste it into WhatsApp.");
-          } catch {
-            window.prompt("Copy this text:", whatsapp);
-          }
-        }}
-      >
-        <ClipboardCopy className="size-4" /> Copy for WhatsApp
-      </Button>
+      {canEdit && (
+        <>
+          <Link href={`/print/notice/${id}`} target="_blank" className={buttonClasses("secondary")}>
+            <Printer className="size-4" aria-hidden /> Print circular
+          </Link>
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(whatsapp);
+                toast.success("Copied. Paste it into WhatsApp.");
+              } catch {
+                window.prompt("Copy this text:", whatsapp);
+              }
+            }}
+          >
+            <ClipboardCopy className="size-4" /> Copy for WhatsApp
+          </Button>
+        </>
+      )}
       {isAdmin &&
         (state === "archived" ? (
           <Button variant="secondary" onClick={() => run(archiveNotice(id, false))}>

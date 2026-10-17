@@ -59,3 +59,71 @@ export function noticeState(n: { archived_at: string | null; status: string; pub
   if (n.publish_date > today) return "scheduled";
   return "active";
 }
+
+// ------------------------------------------------------------------ diary workflow
+export type DiaryStatus = "draft" | "submitted" | "published";
+export const STATUS_TEXT: Record<DiaryStatus | "new" | "missing" | "skipped", string> = { new: "Not started", draft: "Draft", submitted: "Submitted", published: "Published", missing: "Not submitted", skipped: "Skipped" };
+
+export function weekdayOf(iso: string) {
+  return new Date(iso + "T00:00:00Z").toLocaleDateString("en-IN", { weekday: "long", timeZone: "UTC" });
+}
+export const FAR_AHEAD_DAYS = 7;
+
+/** A class is late when its expected subjects are not all in and the deadline (HH:MM, school time) has passed. */
+export function diaryIsLate(o: { date: string; today: string; nowHm: string; deadline: string; complete: boolean; expected: number }) {
+  if (o.complete || o.expected === 0) return false;
+  if (o.date < o.today) return true;
+  return o.date === o.today && o.nowHm > o.deadline.slice(0, 5);
+}
+
+/** One line of a class's combined diary. */
+export type CombinedLine = { subject: string | null; subjectTe?: string | null; body: string; bodyTe: string | null };
+
+/** Remove a leading "Subject:" the teacher typed (the card and message already show the subject). The stored text is not changed. */
+export function stripSubjectPrefix(text: string, names: (string | null | undefined)[]): string {
+  let out = text.trim();
+  for (const n of names) {
+    if (!n) continue;
+    const esc = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`^${esc}\\s*[:：\\-–]\\s*`, "i");
+    if (re.test(out) && out.replace(re, "").trim()) out = out.replace(re, "").trim();
+  }
+  return out;
+}
+/** Lines as parents see them: duplicate "Subject:" prefixes removed. */
+export function cleanLines(lines: CombinedLine[]): CombinedLine[] {
+  return lines.map((l) => (l.subject ? { ...l, body: stripSubjectPrefix(l.body, [l.subject, l.subjectTe]), bodyTe: l.bodyTe ? stripSubjectPrefix(l.bodyTe, [l.subjectTe, l.subject]) : l.bodyTe } : l));
+}
+
+function diaryParts(raw: CombinedLine[]) {
+  const lines = cleanLines(raw);
+  const subj = lines.filter((l) => l.subject);
+  const remark = lines.find((l) => !l.subject);
+  const flat = (t: string) => t.replace(/\n+/g, " ");
+  const en = subj.map((l, i) => `${i + 1}. *${l.subject}:* ${flat(l.body)}`);
+  if (remark) en.push("", `*Class remark:* ${flat(remark.body)}`);
+  if (!lines.length) en.push("No diary entries for this day.");
+  const te = subj.filter((l) => l.bodyTe).map((l, i) => `${i + 1}. *${l.subjectTe || l.subject}:* ${flat(l.bodyTe!)}`);
+  if (remark?.bodyTe) te.push("", `*తరగతి సూచన:* ${flat(remark.bodyTe)}`);
+  return { en, te };
+}
+const TE_RULE = ["", "──────────", "*తెలుగు*"];
+
+/**
+ * The combined class diary as WhatsApp text: English first, then Telugu (only where a Telugu text was written),
+ * subjects in timetable order, class remark last. Teacher names are never included.
+ */
+export function combinedDiaryText(o: { school: string; classLabel: string; date: string; lines: CombinedLine[] }) {
+  const { en, te } = diaryParts(o.lines);
+  return [`*${o.school}*`, `*Daily diary · ${o.classLabel}*`, fmtLong(o.date), "", ...en, ...(te.length ? [...TE_RULE, ...te] : [])].join("\n");
+}
+
+/** One school-group message for several classes (each class has its own image). */
+export function multiClassDiaryText(o: { school: string; date: string; classes: { classLabel: string; lines: CombinedLine[] }[] }) {
+  const out = [`*${o.school}*`, "*Daily diary*", fmtLong(o.date)];
+  for (const c of o.classes) {
+    const { en, te } = diaryParts(c.lines);
+    out.push("", `━━ *${c.classLabel}* ━━`, ...en, ...(te.length ? [...TE_RULE, ...te] : []));
+  }
+  return out.join("\n");
+}

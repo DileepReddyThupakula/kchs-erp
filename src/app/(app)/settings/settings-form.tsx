@@ -80,6 +80,18 @@ export function SettingsForm({ settings: s, editable }: { settings: SchoolSettin
         {text("receipt_no_prefix", "Fee receipt prefix")}
         {text("circular_prefix", "Circular number prefix", "Circulars are numbered PREFIX/2026-27/001. Empty = the school short name.")}
       </Card>
+      <Card className="grid gap-4 sm:grid-cols-2">
+        <h2 className="font-medium sm:col-span-2">Automatic Telugu translation</h2>
+        <Field label="Monthly limit (characters)" name="translation_monthly_cap" hint="Translation switches itself off at this limit and starts again next month. Lines then show “Translation pending” and can be typed by hand." errors={fe.translation_monthly_cap}>
+          <Input id="translation_monthly_cap" name="translation_monthly_cap" type="number" min={0} step={1000} defaultValue={s.translation_monthly_cap ?? 1500000} disabled={!editable} />
+        </Field>
+      </Card>
+      <Card className="grid gap-4 sm:grid-cols-2">
+        <h2 className="font-medium sm:col-span-2">Diary</h2>
+        <Field label="Diary submission deadline" name="diary_deadline" hint="Teachers submit their subject's diary before this time. Classes still incomplete after it are flagged late." errors={fe.diary_deadline}>
+          <Input id="diary_deadline" name="diary_deadline" type="time" defaultValue={(s.diary_deadline ?? "15:30").slice(0, 5)} disabled={!editable} />
+        </Field>
+      </Card>
       {editable && (
         <div className="flex items-center gap-3">
           <Button type="submit" loading={pending}>

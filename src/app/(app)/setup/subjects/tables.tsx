@@ -47,6 +47,7 @@ export function SubjectsTable({ rows, editable }: { rows: SubjectRow[]; editable
   ];
   const columns: Column<SubjectRow>[] = [
     { id: "name", header: "Subject", hideable: false, cell: (r) => <span className="font-medium text-navy-900">{r.name}</span>, sortValue: (r) => r.name, className: "whitespace-nowrap", pinned: "left" },
+    { id: "te", header: "Telugu name", cell: (r) => (r.name_te ? <span>{r.name_te}{!r.name_te_verified && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-900">VERIFY</span>}</span> : <span className="text-muted">—</span>), sortValue: (r) => r.name_te ?? "" },
     { id: "code", header: "Code", cell: (r) => <span className="font-mono text-xs">{r.code ?? "—"}</span>, sortValue: (r) => r.code ?? "" },
     { id: "type", header: "Type", cell: (r) => <StatusChip status={r.type} label={TYPE_LABEL[r.type]} />, sortValue: (r) => TYPE_LABEL[r.type] },
     { id: "classes", header: "Classes", align: "right", cell: (r) => r.classCount, sortValue: (r) => r.classCount },
@@ -91,6 +92,12 @@ export function SubjectsTable({ rows, editable }: { rows: SubjectRow[]; editable
                     <Field label="Name" name="name" errors={fe.name} className="sm:col-span-2">
                       <Input id="name" name="name" defaultValue={s?.name ?? ""} required />
                     </Field>
+                    <Field label="Telugu name (తెలుగు)" name="name_te" errors={fe.name_te} hint="Shown on the diary card and message. Standard names are pre-filled: please have a Telugu speaker VERIFY them." className="sm:col-span-2">
+                      <Input id="name_te" name="name_te" lang="te" defaultValue={s?.name_te ?? ""} />
+                    </Field>
+                    <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                      <input type="checkbox" name="name_te_verified" defaultChecked={s?.name_te_verified ?? false} /> Telugu name checked by a Telugu speaker
+                    </label>
                     <Field label="Code" name="code" errors={fe.code}>
                       <Input id="code" name="code" defaultValue={s?.code ?? ""} />
                     </Field>

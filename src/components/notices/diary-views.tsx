@@ -1,18 +1,16 @@
 "use client";
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Archive, Check, ClipboardCopy, EyeOff, Pencil, Printer, RotateCcw } from "lucide-react";
+import { Archive, Check, EyeOff, Pencil, RotateCcw } from "lucide-react";
 import { Badge, Card, EmptyState } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { buttonClasses } from "@/components/ui/button-classes";
 import { Field, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/dialog";
 import { DataTable, type Column } from "@/components/data-table/data-table";
 import { AttachmentsPanel } from "@/components/notices/attachments-panel";
-import { archiveDiary, saveDiaryEntry, setDiaryStatus } from "@/features/notices/actions";
-import { diaryWhatsApp, fmtLong, fmtShort } from "@/features/notices/shared";
+import { adminSaveDiaryLine, archiveDiary, saveDiaryEntry, setDiaryStatus } from "@/features/notices/actions";
+import { fmtLong, fmtShort } from "@/features/notices/shared";
 import type { DiaryRow, FileLink } from "@/features/notices/queries";
 
 export type Opt = { id: string; label: string };
@@ -35,7 +33,9 @@ export function EntryModal({ entry, sections, subjects, files, onClose }: { entr
   const router = useRouter();
   const [body, setBody] = useState(entry.body);
   const [subjectId, setSubjectId] = useState(entry.subjectId ?? "");
-  const [status, setStatus] = useState(entry.status);
+  const [bodyTe, setBodyTe] = useState(entry.bodyTe);
+  const [status, setStatus] = useState<"draft" | "submitted" | "published">(entry.status);
+  const single = entry.sectionIds.length === 1;
   const [secIds, setSecIds] = useState(entry.sectionIds);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -53,9 +53,16 @@ export function EntryModal({ entry, sections, subjects, files, onClose }: { entr
             loading={busy}
             onClick={async () => {
               setBusy(true);
-              const r = await saveDiaryEntry({ id: entry.id, date: entry.date, sectionIds: secIds, subjectId: subjectId || null, body, status });
+              let r: { ok: boolean; error?: string };
+              if (single) {
+                // one section: keep the workflow fields (Telugu text, author); status changes go through the status action
+                r = await adminSaveDiaryLine({ sectionId: entry.sectionIds[0], date: entry.date, subjectId: subjectId || null, body, bodyTe });
+                if (r.ok && status !== entry.status) r = await setDiaryStatus(entry.id, status);
+              } else {
+                r = await saveDiaryEntry({ id: entry.id, date: entry.date, sectionIds: secIds, subjectId: subjectId || null, body, status: status === "submitted" ? "draft" : status });
+              }
               setBusy(false);
-              if (!r.ok) return setError(r.error);
+              if (!r.ok) return setError(r.error ?? "Could not save.");
               toast.success("Saved.");
               router.refresh();
               onClose();
@@ -80,6 +87,11 @@ export function EntryModal({ entry, sections, subjects, files, onClose }: { entr
         <Field label="Text" name="de-body">
           <Textarea id="de-body" rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
         </Field>
+        {single && (
+          <Field label="Telugu (తెలుగు) — optional" name="de-te" hint="Type or paste Telugu text.">
+            <Textarea id="de-te" rows={3} lang="te" value={bodyTe} onChange={(e) => setBodyTe(e.target.value)} />
+          </Field>
+        )}
         <fieldset>
           <legend className="mb-1 text-sm font-medium">Sections</legend>
           <div className="flex flex-wrap gap-3">
@@ -92,8 +104,9 @@ export function EntryModal({ entry, sections, subjects, files, onClose }: { entr
           </div>
         </fieldset>
         <Field label="Status" name="de-status">
-          <Select id="de-status" value={status} onChange={(e) => setStatus(e.target.value as "draft" | "published")}>
+          <Select id="de-status" value={status} onChange={(e) => setStatus(e.target.value as "draft" | "submitted" | "published")}>
             <option value="published">Published (teachers of the sections can see it)</option>
+            {single && <option value="submitted">Submitted (waiting to be published)</option>}
             <option value="draft">Draft (only Admin and editors can see it)</option>
           </Select>
         </Field>
@@ -105,103 +118,43 @@ export function EntryModal({ entry, sections, subjects, files, onClose }: { entr
 }
 
 // ------------------------------------------------------------------ day view
-export function DayView({
-  school,
-  sectionLabel,
-  date,
-  entries,
-  files,
-  canEdit,
-  isAdmin,
-  sections,
-  subjects,
-  printHref,
-}: {
-  school: string;
-  sectionLabel: string;
-  date: string;
-  entries: DiaryRow[];
-  files: Record<string, FileLink[]>;
-  canEdit: boolean;
-  isAdmin: boolean;
-  sections: Opt[];
-  subjects: Opt[];
-  printHref: string;
-}) {
-  const run = useRun();
-  const [edit, setEdit] = useState<DiaryRow | null>(null);
-  const live = entries.filter((e) => !e.archived);
-  const published = live.filter((e) => e.status === "published");
-  const wa = diaryWhatsApp({ school, classLabel: sectionLabel, date, lines: published.map((e) => ({ subject: e.subject, body: e.body })) });
+/** The published diary of one section and day (read only; printing and sending are in Class diary). */
+export function DayView({ sectionLabel, date, entries, files }: { sectionLabel: string; date: string; entries: DiaryRow[]; files: Record<string, FileLink[]>; canEdit?: boolean }) {
+  const live = entries.filter((e) => !e.archived && e.status === "published");
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Link href={printHref} target="_blank" className={buttonClasses("secondary", "sm")}>
-          <Printer className="size-4" aria-hidden /> Print daily diary
-        </Link>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(wa);
-              toast.success("Copied. Paste it into the class WhatsApp group.");
-            } catch {
-              window.prompt("Copy this text:", wa);
-            }
-          }}
-        >
-          <ClipboardCopy className="size-4" /> Copy for WhatsApp
-        </Button>
-        <span className="text-sm text-muted">
-          {sectionLabel} · {fmtLong(date)}
-        </span>
-      </div>
+      <p className="text-sm text-muted">
+        {sectionLabel} · {fmtLong(date)}
+      </p>
       {live.length === 0 ? (
-        <EmptyState title="No diary for this day">{canEdit ? "Use Quick entry to add the day's homework." : "Nothing has been published for this section on this day."}</EmptyState>
+        <EmptyState title="No diary for this day">Nothing has been published for this section on this day.</EmptyState>
       ) : (
         <ul className="grid gap-2">
           {live.map((e) => (
             <li key={e.id}>
-              <Card className="flex flex-wrap items-start gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-navy-900">
-                    {e.subject ?? "Class remark"}
-                    {e.status === "draft" && <Badge tone="warning">Draft</Badge>}
+              <Card>
+                <p className="text-sm font-semibold text-navy-900">{e.subject ?? "Class remark"}</p>
+                <p className="mt-0.5 whitespace-pre-wrap text-sm">{e.body}</p>
+                {e.bodyTe && (
+                  <p className="mt-1 whitespace-pre-wrap text-sm">
+                    <span className="mr-1.5 rounded bg-gold-100 px-1 text-xs font-semibold text-gold-800">తెలుగు</span>
+                    {e.bodyTe}
                   </p>
-                  <p className="mt-0.5 whitespace-pre-wrap text-sm">{e.body}</p>
-                  {(files[e.id] ?? []).length > 0 && (
-                    <p className="mt-1 flex flex-wrap gap-2 text-xs">
-                      {(files[e.id] ?? []).map((f) => (
-                        <a key={f.id} href={f.url ?? undefined} target="_blank" rel="noreferrer" className="rounded border border-border px-1.5 py-0.5 text-navy-700 hover:underline">
-                          {f.name}
-                        </a>
-                      ))}
-                    </p>
-                  )}
-                  <p className="mt-1 text-xs text-muted">{e.createdBy && `Added by ${e.createdBy} · `}for {e.sections}</p>
-                </div>
-                {canEdit && (
-                  <div className="flex shrink-0 gap-1">
-                    <Button variant="ghost" size="sm" aria-label="Edit entry" onClick={() => setEdit(e)}>
-                      <Pencil className="size-4" /> Edit
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => run(setDiaryStatus(e.id, e.status === "published" ? "draft" : "published"))}>
-                      {e.status === "published" ? <><EyeOff className="size-4" /> Unpublish</> : <><Check className="size-4" /> Publish</>}
-                    </Button>
-                    {isAdmin && (
-                      <Button variant="ghost" size="sm" onClick={() => run(archiveDiary(e.id, true))}>
-                        <Archive className="size-4" /> Archive
-                      </Button>
-                    )}
-                  </div>
+                )}
+                {(files[e.id] ?? []).length > 0 && (
+                  <p className="mt-1 flex flex-wrap gap-2 text-xs">
+                    {(files[e.id] ?? []).map((f) => (
+                      <a key={f.id} href={f.url ?? undefined} target="_blank" rel="noreferrer" className="rounded border border-border px-1.5 py-0.5 text-navy-700 hover:underline">
+                        {f.name}
+                      </a>
+                    ))}
+                  </p>
                 )}
               </Card>
             </li>
           ))}
         </ul>
       )}
-      {edit && <EntryModal entry={edit} sections={sections} subjects={subjects} files={files[edit.id] ?? []} onClose={() => setEdit(null)} />}
     </div>
   );
 }
@@ -231,7 +184,7 @@ export function DiaryTable({
     { id: "sections", header: "Class / section", cell: (r) => r.sections, sortValue: (r) => r.sections, exportValue: (r) => r.sections },
     { id: "subject", header: "Subject", cell: (r) => r.subject ?? <span className="text-muted">Class remark</span>, sortValue: (r) => r.subject ?? "", exportValue: (r) => r.subject ?? "" },
     { id: "body", header: "Homework / remark", cell: (r) => <span className="line-clamp-2 max-w-md">{r.body}</span>, exportValue: (r) => r.body },
-    { id: "status", header: "Status", cell: (r) => (r.archived ? <Badge>Archived</Badge> : r.status === "draft" ? <Badge tone="warning">Draft</Badge> : <Badge tone="success">Published</Badge>), sortValue: (r) => r.status, exportValue: (r) => (r.archived ? "Archived" : r.status) },
+    { id: "status", header: "Status", cell: (r) => (r.archived ? <Badge>Archived</Badge> : r.status === "draft" ? <Badge tone="warning">Draft</Badge> : r.status === "submitted" ? <Badge tone="warning">Submitted</Badge> : <Badge tone="success">Published</Badge>), sortValue: (r) => r.status, exportValue: (r) => (r.archived ? "Archived" : r.status) },
     { id: "by", header: "Added by", cell: (r) => r.createdBy || "—", defaultHidden: true, exportValue: (r) => r.createdBy },
   ];
   return (
@@ -246,7 +199,7 @@ export function DiaryTable({
           { id: "class", label: "Class", options: classes.map((c) => ({ value: c.id, label: c.label })), match: (r, v) => r.classIds.includes(v) },
           { id: "section", label: "Section", options: sections.map((s) => ({ value: s.id, label: s.label })), match: (r, v) => r.sectionIds.includes(v) },
           { id: "subject", label: "Subject", options: subjects.map((s) => ({ value: s.id, label: s.label })), match: (r, v) => r.subjectId === v },
-          { id: "status", label: "Status", options: [{ value: "published", label: "Published" }, { value: "draft", label: "Draft" }], match: (r, v) => r.status === v && !r.archived },
+          { id: "status", label: "Status", options: [{ value: "published", label: "Published" }, { value: "submitted", label: "Submitted" }, { value: "draft", label: "Draft" }], match: (r, v) => r.status === v && !r.archived },
         ]}
         pageSize={30}
         exportName="diary-entries"
@@ -260,7 +213,7 @@ export function DiaryTable({
                     ? [{ id: "restore", kind: "menu" as const, label: "Restore", icon: RotateCcw, onClick: () => void run(archiveDiary(r.id, false)) }]
                     : []
                   : [
-                      { id: "pub", kind: "menu" as const, label: r.status === "published" ? "Unpublish (back to draft)" : "Publish", icon: r.status === "published" ? EyeOff : Check, onClick: () => void run(setDiaryStatus(r.id, r.status === "published" ? "draft" : "published")) },
+                      { id: "pub", kind: "menu" as const, label: r.status === "published" ? "Unpublish" : "Publish", icon: r.status === "published" ? EyeOff : Check, onClick: () => void run(setDiaryStatus(r.id, r.status === "published" ? "submitted" : "published")) },
                       ...(isAdmin
                         ? [{ id: "archive", kind: "menu" as const, label: "Archive", icon: Archive, tone: "danger" as const, confirm: { title: "Archive this diary entry?", message: "It disappears for teachers. Admin can restore it.", confirmLabel: "Archive", danger: true }, onClick: () => void run(archiveDiary(r.id, true)) }]
                         : []),

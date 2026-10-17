@@ -25,13 +25,18 @@ export default async function run({ ok, skip }) {
   const { data: ct } = await admin.from("sections").select("id").eq("class_teacher_id", t1.id);
   const { data: ta } = await admin.from("teacher_assignments").select("section_id").eq("staff_id", t1.id);
   const mine = new Set([...(ct ?? []).map((s) => s.id), ...(ta ?? []).map((a) => a.section_id)]);
+  // a teacher sees the published diary of their sections, plus entries they wrote themselves (any status)
+  const { data: own } = await admin.from("diary_entries").select("id").eq("author_id", t1.id).is("archived_at", null);
+  const ownIds = new Set((own ?? []).map((e) => e.id));
   const expected = new Set(
-    allDiary.filter((e) => e.status === "published" && !e.archived_at && links.some((l) => l.entry_id === e.id && mine.has(l.section_id))).map((e) => e.id),
+    allDiary
+      .filter((e) => !e.archived_at && ((e.status === "published" && links.some((l) => l.entry_id === e.id && mine.has(l.section_id))) || ownIds.has(e.id)))
+      .map((e) => e.id),
   );
 
   const teacher = await login("teacher1@demo.kchs.test");
   const { data: seen } = await teacher.from("diary_entries").select("id, status").limit(5000);
-  ok(seen.length === expected.size && seen.every((e) => expected.has(e.id) && e.status === "published"), `API: teacher1 sees exactly the ${expected.size} published diary entries of their sections`, `got ${seen.length}`);
+  ok(seen.length === expected.size && seen.every((e) => expected.has(e.id) && (e.status === "published" || ownIds.has(e.id))), `API: teacher1 sees exactly the ${expected.size} entries (published ones of their sections plus their own)`, `got ${seen.length}`);
   ok(seen.length < allDiary.length, "API: teacher1 does not see every diary entry");
   const { error: wErr } = await teacher.rpc("save_diary", { p: { entry_date: today, section_ids: [...mine], body: "Should not be allowed", status: "published" } });
   ok(!!wErr, "API: teacher1 cannot add diary entries", wErr?.message);

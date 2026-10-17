@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireStaff } from "@/lib/auth/session";
+import { requireCapability } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
 import { DiaryPrint } from "@/components/notices/print-sheet";
@@ -13,7 +13,7 @@ export const metadata = { title: "Daily diary" };
 /** A4 daily diary of one section. What prints is what the signed-in person may see (RLS): teachers get published entries of their own sections only. */
 export default async function PrintDiary({ searchParams }: { searchParams: Promise<{ section?: string; date?: string }> }) {
   const sp = await searchParams;
-  await requireStaff();
+  await requireCapability("notices.edit"); // printing for sharing: Admin and the notices & diary duty only
   const supabase = await createClient();
   const year = await resolveYear();
   if (!year || !/^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? "")) redirect("/not-allowed");

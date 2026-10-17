@@ -174,6 +174,8 @@ export async function deleteSection(_: ActionState, fd: FormData): Promise<Actio
 const subjectSchema = z.object({
   name: z.string().trim().min(2, "Subject name is required"),
   code: blankToNull,
+  name_te: blankToNull,
+  name_te_verified: z.boolean(),
   type: z.enum(["scholastic", "co_scholastic"]),
   sort_order: z.coerce.number().int().default(0),
   is_active: z.boolean(),
@@ -181,7 +183,7 @@ const subjectSchema = z.object({
 
 export async function saveSubject(_: ActionState, fd: FormData): Promise<ActionState> {
   await requireCapability("setup.edit");
-  const parsed = subjectSchema.safeParse({ ...Object.fromEntries(fd), is_active: fd.get("is_active") !== "off" });
+  const parsed = subjectSchema.safeParse({ ...Object.fromEntries(fd), is_active: fd.get("is_active") !== "off", name_te_verified: fd.get("name_te_verified") === "on" });
   if (!parsed.success) return invalid(parsed.error);
   const id = fd.get("id")?.toString();
   const supabase = await createClient();

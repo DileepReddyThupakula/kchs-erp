@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability, requireStaff } from "@/lib/auth/session";
+import { translateDiaryEntry, REASON_TEXT } from "@/lib/translate/service";
 import { ATTACH_MAX, ATTACH_TYPES } from "./shared";
 
 const uuid = z.string().uuid();
@@ -44,14 +45,14 @@ export async function saveDiaryEntry(input: { id: string; date: string; sectionI
   return { ok: true, message: "Diary entry saved." };
 }
 
-export async function setDiaryStatus(id: string, status: "draft" | "published"): Promise<NtResult> {
+export async function setDiaryStatus(id: string, status: "draft" | "submitted" | "published"): Promise<NtResult> {
   await requireCapability("notices.edit");
   if (!uuid.safeParse(id).success) return fail("Invalid entry.");
   const supabase = await createClient();
   const { error } = await supabase.rpc("set_diary_status", { p_id: id, p_status: status });
   if (error) return fail(msg(error));
   refresh();
-  return { ok: true, message: status === "published" ? "Published." : "Moved back to draft." };
+  return { ok: true, message: status === "published" ? "Published." : status === "submitted" ? "Unpublished." : "Moved back to draft." };
 }
 
 export async function archiveDiary(id: string, archive: boolean): Promise<NtResult> {
@@ -130,8 +131,10 @@ export async function markNoticeRead(id: string): Promise<NtResult> {
 
 // ------------------------------------------------------------------ attachments
 export async function uploadAttachment(formData: FormData): Promise<NtResult> {
-  await requireCapability("notices.edit");
   const kind = formData.get("kind");
+  // diary files: the author of an unpublished entry or the duty (the database decides); notice files: the duty
+  if (kind === "notice") await requireCapability("notices.edit");
+  else await requireStaff();
   const parent = String(formData.get("parent") ?? "");
   const file = formData.get("file");
   if ((kind !== "diary" && kind !== "notice") || !uuid.safeParse(parent).success || !(file instanceof File)) return fail("Choose a file to attach.");
@@ -159,7 +162,8 @@ export async function uploadAttachment(formData: FormData): Promise<NtResult> {
 }
 
 export async function removeAttachment(kind: "diary" | "notice", id: string): Promise<NtResult> {
-  await requireCapability("notices.edit");
+  if (kind === "notice") await requireCapability("notices.edit");
+  else await requireStaff();
   if (!uuid.safeParse(id).success) return fail("Invalid file.");
   const supabase = await createClient();
   const { data: path, error } = await supabase.rpc("remove_attachment", { p_kind: kind, p_id: id });
@@ -167,4 +171,143 @@ export async function removeAttachment(kind: "diary" | "notice", id: string): Pr
   if (path) await supabase.storage.from(kind === "diary" ? "diary-files" : "notice-files").remove([path]);
   refresh();
   return { ok: true, message: "File removed." };
+}
+
+// ------------------------------------------------------------------ diary workflow
+const subjectEntry = z.object({
+  sectionId: uuid,
+  date: z.string().regex(DATE),
+  subjectId: uuid.nullable(),
+  body: z.string().trim().min(2, "Write the diary text"),
+  bodyTe: z.string().trim().optional(),
+});
+const teacherEntry = subjectEntry.omit({ bodyTe: true });
+
+/** A teacher saves a draft or submits one subject (or the class remark) for one section and date. */
+export async function submitDiary(input: z.input<typeof teacherEntry> & { submit: boolean }): Promise<NtResult<{ id: string }>> {
+  await requireStaff();
+  const p = teacherEntry.safeParse(input);
+  if (!p.success) return fail(p.error.issues[0]?.message ?? "Please check the entry.");
+  const v = p.data;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("submit_diary", {
+    p: { section_id: v.sectionId, entry_date: v.date, subject_id: v.subjectId, kind: v.subjectId ? "subject" : "remark", body: v.body, submit: input.submit },
+  });
+  if (error) return fail(msg(error));
+  // Telugu is generated on Submit only (drafts are never sent to the translation service)
+  let note = "";
+  if (input.submit) {
+    const t = await translateDiaryEntry(data);
+    if (t.state === "pending") note = " Translation pending: the school office will add the Telugu.";
+  }
+  refresh();
+  return { ok: true, id: data, message: input.submit ? `Submitted. The school office will review and publish it.${note}` : "Draft saved." };
+}
+
+/** Admin / duty: edit any line or add one. */
+export async function adminSaveDiaryLine(input: z.input<typeof subjectEntry>): Promise<NtResult<{ id: string }>> {
+  await requireCapability("notices.edit");
+  const p = subjectEntry.safeParse(input);
+  if (!p.success) return fail(p.error.issues[0]?.message ?? "Please check the entry.");
+  const v = p.data;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("admin_save_diary_line", {
+    p: { section_id: v.sectionId, entry_date: v.date, subject_id: v.subjectId, kind: v.subjectId ? "subject" : "remark", body: v.body, body_te: v.bodyTe || null },
+  });
+  if (error) return fail(msg(error));
+  const t = await translateDiaryEntry(data); // only does anything when the English changed and the Telugu is not reviewed
+  refresh();
+  return { ok: true, id: data, message: t.state === "pending" && t.reason !== "empty" ? "Line saved. Translation pending." : "Line saved." };
+}
+
+export async function publishClassDiary(sectionId: string, date: string): Promise<NtResult<{ count: number }>> {
+  await requireCapability("notices.edit");
+  if (!uuid.safeParse(sectionId).success || !DATE.test(date)) return fail("Choose a class and a date.");
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("publish_class_diary", { p_section: sectionId, p_date: date });
+  if (error) return fail(msg(error));
+  refresh();
+  return { ok: true, count: data, message: data ? `Published ${data} line(s).` : "Everything was already published." };
+}
+
+export async function publishAllComplete(date: string): Promise<NtResult<{ count: number }>> {
+  await requireCapability("notices.edit");
+  if (!DATE.test(date)) return fail("Choose a date.");
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("publish_all_complete", { p_date: date });
+  if (error) return fail(msg(error));
+  refresh();
+  return { ok: true, count: data, message: data ? `Published ${data} complete class(es).` : "No class is complete and waiting to be published." };
+}
+
+export async function unpublishClassDiary(sectionId: string, date: string): Promise<NtResult> {
+  await requireCapability("notices.edit");
+  if (!uuid.safeParse(sectionId).success || !DATE.test(date)) return fail("Choose a class and a date.");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("unpublish_class_diary", { p_section: sectionId, p_date: date });
+  if (error) return fail(msg(error));
+  refresh();
+  return { ok: true, message: "Unpublished. Teachers can edit their lines again until you publish." };
+}
+
+export async function skipDiarySubject(sectionId: string, date: string, subjectId: string, skip: boolean): Promise<NtResult> {
+  await requireCapability("notices.edit");
+  if (!uuid.safeParse(sectionId).success || !uuid.safeParse(subjectId).success || !DATE.test(date)) return fail("Invalid request.");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("skip_diary_subject", { p_section: sectionId, p_date: date, p_subject: subjectId, p_skip: skip });
+  if (error) return fail(msg(error));
+  refresh();
+  return { ok: true, message: skip ? "Skipped for this day." : "Expected again." };
+}
+
+export async function remindDiary(sectionId: string, date: string, subjectId: string | null): Promise<NtResult> {
+  await requireCapability("notices.edit");
+  if (!uuid.safeParse(sectionId).success || !DATE.test(date) || (subjectId && !uuid.safeParse(subjectId).success)) return fail("Invalid request.");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("remind_diary", { p_section: sectionId, p_date: date, p_subject: subjectId });
+  if (error) return fail(msg(error));
+  refresh();
+  return { ok: true, message: "Reminder sent. It shows on the teacher's dashboard." };
+}
+
+/** Records that someone opened / copied / printed a share. Never claims delivery. */
+export async function logShare(input: { kind: "diary" | "notice"; target: "group" | "student"; sectionId?: string | null; date?: string | null; channel: "app" | "web" | "share" | "copy" | "download" | "print"; summary: string }): Promise<NtResult> {
+  await requireCapability("notices.edit");
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("log_message", {
+    p_kind: input.kind,
+    p_target: input.target,
+    p_student: null,
+    p_section: input.sectionId ?? null,
+    p_date: input.date ?? null,
+    p_channel: input.channel,
+    p_summary: input.summary,
+  });
+  if (error) return fail(msg(error));
+  return { ok: true };
+}
+
+/** Admin / duty: try the automatic translation again for every pending line of a class and day (or one line). */
+export async function retryTranslation(input: { entryId?: string; sectionId?: string; date?: string }): Promise<NtResult<{ done: number; left: number }>> {
+  await requireCapability("notices.edit");
+  const supabase = await createClient();
+  let ids: string[] = [];
+  if (input.entryId && uuid.safeParse(input.entryId).success) ids = [input.entryId];
+  else if (input.sectionId && input.date && uuid.safeParse(input.sectionId).success && DATE.test(input.date)) {
+    const { data: links } = await supabase.from("diary_entry_sections").select("entry_id").eq("section_id", input.sectionId);
+    const mine = new Set((links ?? []).map((l) => l.entry_id));
+    const { data } = await supabase.from("diary_entries").select("id").eq("entry_date", input.date).eq("te_status", "pending").is("archived_at", null);
+    ids = (data ?? []).map((e) => e.id).filter((id) => mine.has(id));
+  }
+  if (!ids.length) return { ok: true, done: 0, left: 0, message: "Nothing is waiting for translation." };
+  let done = 0;
+  let why = "";
+  for (const id of ids) {
+    const t = await translateDiaryEntry(id);
+    if (t.state === "translated") done++;
+    else if (t.state === "pending" && t.reason) why = REASON_TEXT[t.reason] ?? t.reason;
+  }
+  refresh();
+  const left = ids.length - done;
+  return { ok: true, done, left, message: left ? `${done} translated, ${left} still pending (${why || "try again later, or type the Telugu"}).` : `${done} line(s) translated.` };
 }

@@ -38,6 +38,8 @@ const schema = z.object({
   admission_no_prefix: z.string().trim(),
   receipt_no_prefix: z.string().trim(),
   circular_prefix: z.string().trim(),
+  translation_monthly_cap: z.coerce.number().int().min(0).max(100000000),
+  diary_deadline: z.string().regex(/^\d{2}:\d{2}$/, "Use a time like 15:30"),
 });
 
 export async function updateSettings(_: ActionState, formData: FormData): Promise<ActionState> {
