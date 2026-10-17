@@ -79,3 +79,27 @@ select pg_temp.login_as('00000000-0000-4000-fc10-000000000003');
 select pg_temp.ok(jsonb_typeof(public.staff_dashboard('2a100000-0000-4000-fc10-000000000002', app.today_ist()) -> 'diary_board') = 'array', 'the notices & diary duty gets the class-diary board');
 select pg_temp.login_as('00000000-0000-4000-fc10-000000000002');
 select pg_temp.ok(public.staff_dashboard('2a100000-0000-4000-fc10-000000000002', app.today_ist()) -> 'diary_board' = 'null'::jsonb, 'a plain teacher does not');
+
+-- ================= the diary card with several subjects: draft and submitted lines, someone else's draft, a published remark
+select pg_temp.logout();
+insert into public.subjects (id, name, code) values ('5e100000-0000-4000-fc10-000000000002', 'DB Science', 'DBS'), ('5e100000-0000-4000-fc10-000000000003', 'DB English', 'DBE');
+insert into public.teacher_assignments (staff_id, section_id, subject_id) values
+  ('1a100000-0000-4000-fc10-000000000002', '3b400000-0000-4000-fc10-000000000002', '5e100000-0000-4000-fc10-000000000002'),
+  ('1a100000-0000-4000-fc10-000000000002', '3b400000-0000-4000-fc10-000000000002', '5e100000-0000-4000-fc10-000000000003');
+insert into public.diary_entries (id, academic_year_id, entry_date, kind, subject_id, body, status, author_id) values
+  ('6d100000-0000-4000-fc10-000000000001', '2a100000-0000-4000-fc10-000000000002', app.today_ist(), 'subject', '5e100000-0000-4000-fc10-000000000001', 'Maths homework draft', 'draft', '1a100000-0000-4000-fc10-000000000002'),
+  ('6d100000-0000-4000-fc10-000000000002', '2a100000-0000-4000-fc10-000000000002', app.today_ist(), 'subject', '5e100000-0000-4000-fc10-000000000002', 'Science submitted', 'submitted', '1a100000-0000-4000-fc10-000000000002'),
+  ('6d100000-0000-4000-fc10-000000000003', '2a100000-0000-4000-fc10-000000000002', app.today_ist(), 'subject', '5e100000-0000-4000-fc10-000000000003', 'Someone else''s English draft', 'draft', '1a100000-0000-4000-fc10-000000000003'),
+  ('6d100000-0000-4000-fc10-000000000004', '2a100000-0000-4000-fc10-000000000002', app.today_ist() - 1, 'remark', null, 'Yesterday''s remark', 'draft', '1a100000-0000-4000-fc10-000000000002');
+insert into public.diary_entry_sections (entry_id, section_id) select id, '3b400000-0000-4000-fc10-000000000002' from public.diary_entries where id::text like '6d100000-%-fc10-%';
+select pg_temp.login_as('00000000-0000-4000-fc10-000000000002');
+create temp table _dd as select x from jsonb_array_elements(public.staff_dashboard('2a100000-0000-4000-fc10-000000000002', app.today_ist()) -> 'diary_todo') x;
+select pg_temp.counts($$select count(*) from _dd$$, 3, 'diary card, 3 subjects + remark: Maths (draft), English (not started) and the class remark are still to do');
+select pg_temp.counts($$select count(*) from _dd where x ->> 'subject' = 'DB Maths' and x ->> 'status' = 'draft'$$, 1, 'diary card: Maths shows as Draft');
+select pg_temp.counts($$select count(*) from _dd where x ->> 'subject' = 'DB Science'$$, 0, 'diary card: Science is submitted, so it is not listed');
+select pg_temp.counts($$select count(*) from _dd where x ->> 'subject' = 'DB English' and x ->> 'status' = 'new'$$, 1, 'diary card: someone else''s English draft does not count as this teacher''s (still Not started)');
+select pg_temp.counts($$select count(*) from _dd where x ->> 'subject' is null and x ->> 'status' = 'new'$$, 1, 'diary card: yesterday''s draft remark does not count for today');
+select pg_temp.logout();
+update public.diary_entries set status = 'submitted' where id = '6d100000-0000-4000-fc10-000000000001';
+select pg_temp.login_as('00000000-0000-4000-fc10-000000000002');
+select pg_temp.counts($$select count(*) from jsonb_array_elements(public.staff_dashboard('2a100000-0000-4000-fc10-000000000002', app.today_ist()) -> 'diary_todo') x where x ->> 'subject' = 'DB Maths'$$, 0, 'diary card: once Maths is submitted it leaves the list');
