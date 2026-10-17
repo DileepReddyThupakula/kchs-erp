@@ -78,6 +78,8 @@ export type SchoolSettings = Stamps & {
   low_attendance_pct: number;
   circular_prefix: string | null;
   diary_deadline: string;
+  default_pass_percent: number;
+  staff_group_name: string | null;
   translation_monthly_cap: number;
   second_saturday_holiday: boolean;
   periods_per_day: number;
@@ -94,6 +96,7 @@ export type Section = Stamps & {
   room: string | null;
   capacity: number | null;
   class_teacher_id: string | null;
+  parents_group_name: string | null;
 };
 export type AppRole = "admin" | "computer_staff" | "teacher";
 export type Staff = Stamps & {
@@ -462,6 +465,7 @@ export type DiaryEntry = Stamps & {
 };
 export type TranslationCacheRow = { hash: string; text_te: string; chars: number; created_at: string };
 export type TranslationUsageRow = { month: string; chars: number };
+export type NoticeSend = Stamps & { id: string; notice_id: string; group_key: string; group_label: string; status: "opened" | "marked_sent"; opened_by: string | null; opened_at: string | null; marked_by: string | null; marked_at: string | null };
 export type DiarySkip = Stamps & { id: string; section_id: string; entry_date: string; subject_id: string; skipped_by: string | null };
 export type DiaryReminder = Stamps & { id: string; teacher_id: string; section_id: string; entry_date: string; subject_id: string | null; reminded_by: string | null };
 export type MessageLogRow = Stamps & {
@@ -486,7 +490,11 @@ export type NoticeRow = Stamps & {
   circular_no: string | null;
   title: string;
   body: string;
-  audience: "all" | "roles" | "classes" | "teachers";
+  title_te: string | null;
+  body_te: string | null;
+  te_status: "none" | "pending" | "auto" | "reviewed";
+  te_src_hash: string | null;
+  audience: "all" | "roles" | "classes" | "teachers" | "parents_all" | "parents_classes";
   publish_date: string;
   expires_on: string | null;
   important: boolean;
@@ -500,6 +508,23 @@ export type NoticeRow = Stamps & {
 export type NoticeAudienceRow = { id: string; notice_id: string; role: AppRole | null; class_id: string | null; staff_id: string | null };
 export type NoticeAttachment = FileMeta & { notice_id: string };
 export type NoticeRead = { notice_id: string; staff_id: string; read_at: string };
+
+// ---- exams & marks
+export type GradeBand = Stamps & { id: string; grade: string; min_pct: number; max_pct: number; grade_point: number; is_fail: boolean };
+export type DescriptiveGrade = Stamps & { code: string; label: string; sort_order: number };
+export type RemarkBankRow = Stamps & { id: string; text_en: string; text_te: string | null; te_verified: boolean; sort_order: number; is_active: boolean };
+export type ExamClassMode = Stamps & { academic_year_id: string; class_id: string; mode: "marks" | "grades" | "remarks" };
+export type ExamComponent = Stamps & { id: string; academic_year_id: string; class_id: string; name: string; max_marks: number; sort_order: number; locked_at: string | null; locked_by: string | null; lock_note: string | null; is_demo: boolean };
+export type ExamSubjectMax = Stamps & { component_id: string; subject_id: string; max_marks: number };
+export type ResultGroup = Stamps & { id: string; academic_year_id: string; class_id: string; name: string; kind: "part" | "term" | "final"; method: "sum" | "average" | "best_n"; best_n: number | null; scale_to: number | null; start_date: string | null; end_date: string | null; sort_order: number; locked_at: string | null; locked_by: string | null; is_demo: boolean };
+export type ResultGroupMember = Stamps & { id: string; group_id: string; component_id: string | null; child_group_id: string | null; scale_to: number | null; sort_order: number };
+export type SubjectPassMark = Stamps & { academic_year_id: string; class_id: string; subject_id: string; pass_percent: number };
+export type MarkRow = Stamps & { id: string; academic_year_id: string; class_id: string; section_id: string; student_id: string; component_id: string; subject_id: string; status: "marked" | "absent" | "na"; marks: number | null; entered_by: string | null; is_demo: boolean };
+export type SubjectResult = { id: string; academic_year_id: string; class_id: string; section_id: string; student_id: string; group_id: string; subject_id: string; scored: number; max_marks: number; pct: number; grade: string | null; grade_point: number | null; pass_percent: number; passed: boolean; has_absent: boolean; missing: number; locked: boolean; updated_at: string };
+export type StudentResult = { id: string; academic_year_id: string; class_id: string; section_id: string; student_id: string; group_id: string; scored: number; max_marks: number; pct: number; grade: string | null; grade_point: number | null; result: "pass" | "fail" | "incomplete"; subjects_count: number; failed_count: number; locked: boolean; updated_at: string };
+export type GradeEntry = Stamps & { id: string; academic_year_id: string; class_id: string; section_id: string; student_id: string; group_id: string; subject_id: string; grade: string | null; remark: string | null; entered_by: string | null; is_demo: boolean };
+export type ReportRemark = Stamps & { id: string; academic_year_id: string; class_id: string; section_id: string; student_id: string; group_id: string; bank_id: string | null; remark_en: string; remark_te: string | null; entered_by: string | null; is_demo: boolean };
+export type ReportCardPrint = Stamps & { id: string; student_id: string; group_id: string; section_id: string | null; printed_by: string | null; printed_at: string; duplicate: boolean };
 
 export type Database = {
   __InternalSupabase: { PostgrestVersion: "14.18" };
@@ -602,6 +627,22 @@ export type Database = {
       diary_entry_sections: T<DiaryEntrySection, "entry_id" | "section_id">;
       translation_cache: T<TranslationCacheRow, "hash" | "text_te" | "chars">;
       translation_usage: T<TranslationUsageRow, "month">;
+      grade_bands: T<GradeBand, "grade" | "min_pct" | "max_pct" | "grade_point">;
+      descriptive_grades: T<DescriptiveGrade, "code" | "label">;
+      remark_bank: T<RemarkBankRow, "text_en">;
+      exam_class_modes: T<ExamClassMode, "academic_year_id" | "class_id" | "mode">;
+      exam_components: T<ExamComponent, "academic_year_id" | "class_id" | "name" | "max_marks">;
+      exam_subject_max: T<ExamSubjectMax, "component_id" | "subject_id" | "max_marks">;
+      result_groups: T<ResultGroup, "academic_year_id" | "class_id" | "name">;
+      result_group_members: T<ResultGroupMember, "group_id">;
+      subject_pass_marks: T<SubjectPassMark, "academic_year_id" | "class_id" | "subject_id" | "pass_percent">;
+      marks: T<MarkRow, "academic_year_id" | "class_id" | "section_id" | "student_id" | "component_id" | "subject_id">;
+      subject_results: T<SubjectResult, "academic_year_id" | "class_id" | "section_id" | "student_id" | "group_id" | "subject_id" | "scored" | "max_marks" | "pct" | "pass_percent" | "passed">;
+      student_results: T<StudentResult, "academic_year_id" | "class_id" | "section_id" | "student_id" | "group_id" | "scored" | "max_marks" | "pct" | "result" | "subjects_count" | "failed_count">;
+      grade_entries: T<GradeEntry, "academic_year_id" | "class_id" | "section_id" | "student_id" | "group_id" | "subject_id">;
+      report_remarks: T<ReportRemark, "academic_year_id" | "class_id" | "section_id" | "student_id" | "group_id" | "remark_en">;
+      report_card_prints: T<ReportCardPrint, "student_id" | "group_id">;
+      notice_sends: T<NoticeSend, "notice_id" | "group_key" | "group_label">;
       diary_skips: T<DiarySkip, "section_id" | "entry_date" | "subject_id">;
       diary_reminders: T<DiaryReminder, "teacher_id" | "section_id" | "entry_date">;
       message_log: T<MessageLogRow, "kind" | "target">;
@@ -663,6 +704,37 @@ export type Database = {
         Returns: string;
       };
       subject_names: { Args: never; Returns: { id: string; name: string; name_te: string | null }[] };
+      apply_notice_translation: { Args: { p_notice: string; p_title_te: string; p_body_te: string; p_hash: string }; Returns: boolean };
+      notice_send_list: { Args: { p_notice: string }; Returns: { group_key: string; group_label: string; status: string; opened_by_name: string | null; opened_at: string | null; marked_by_name: string | null; marked_at: string | null }[] };
+      notice_send_open: { Args: { p_notice: string; p_key: string; p_channel: string }; Returns: undefined };
+      notice_send_mark: { Args: { p_notice: string; p_key: string; p_sent: boolean }; Returns: undefined };
+      notice_send_counts: { Args: never; Returns: { notice_id: string; sent: number; total: number }[] };
+      save_exam_component: { Args: { p: Json }; Returns: string };
+      delete_exam_component: { Args: { p_id: string }; Returns: undefined };
+      set_subject_max: { Args: { p_component: string; p_subject: string; p_max: number | null }; Returns: undefined };
+      save_result_group: { Args: { p: Json }; Returns: string };
+      delete_result_group: { Args: { p_id: string }; Returns: undefined };
+      set_pass_mark: { Args: { p_year: string; p_class: string; p_subject: string; p_percent: number | null }; Returns: undefined };
+      set_class_mode: { Args: { p_year: string; p_class: string; p_mode: string }; Returns: undefined };
+      save_grade_bands: { Args: { p: Json }; Returns: undefined };
+      save_descriptive_grades: { Args: { p: Json }; Returns: undefined };
+      save_remark_bank: { Args: { p: Json }; Returns: undefined };
+      apply_default_scheme: { Args: { p_year: string; p_class: string }; Returns: undefined };
+      lock_result_group: { Args: { p_group: string }; Returns: undefined };
+      lock_exam_component: { Args: { p_component: string }; Returns: undefined };
+      unlock_exam_component: { Args: { p_component: string; p_reason: string }; Returns: undefined };
+      unlock_result_group: { Args: { p_group: string; p_reason: string }; Returns: undefined };
+      students_page: { Args: { p_year: string; p_q?: string; p_class?: string; p_section?: string; p_status?: string; p_docs?: string; p_gov?: string; p_enrol?: string; p_mine?: boolean; p_sort?: string; p_dir?: string; p_offset?: number; p_limit?: number; p_ids?: string[]; p_full?: boolean }; Returns: Json };
+      admin_dashboard: { Args: { p_year: string; p_today: string }; Returns: Json };
+      notice_read_counts: { Args: never; Returns: { notice_id: string; read_count: number; total: number }[] };
+      subject_result_calc: { Args: { p_student: string; p_group: string; p_subject: string }; Returns: Json };
+      exam_pending: { Args: { p_component: string }; Returns: { section_id: string; subject_id: string; pending: number }[] };
+      save_marks: { Args: { p_component: string; p_section: string; p_subject: string; p_rows: Json }; Returns: number };
+      clear_mark: { Args: { p_component: string; p_student: string; p_subject: string }; Returns: undefined };
+      save_grades: { Args: { p_group: string; p_section: string; p_subject: string; p_rows: Json }; Returns: number };
+      save_report_remark: { Args: { p_group: string; p_student: string; p_bank: string | null; p_en: string | null; p_te: string | null }; Returns: undefined };
+      report_card_data: { Args: { p_student: string; p_group: string; p_log?: boolean }; Returns: Json };
+      class_result_list: { Args: { p_section: string; p_group: string }; Returns: { student_id: string; full_name: string; roll_no: number | null; scored: number | null; max_marks: number | null; pct: number | null; grade: string | null; result: string | null; printed: number }[] };
       translation_reserve: { Args: { p_chars: number }; Returns: boolean };
       translation_status: { Args: never; Returns: { used: number; cap: number }[] };
       apply_diary_translation: { Args: { p_entry: string; p_te: string; p_hash: string }; Returns: boolean };

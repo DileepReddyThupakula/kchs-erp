@@ -44,3 +44,17 @@ next-env.d.ts
 # separate build folder for preview servers
 /.next-preview/
 /.next-build/
+
+# generated / local-only files (never commit)
+/design-preview/
+/uploads/
+/test-results/
+/playwright-report/
+*.log
+*.pdf
+*.xlsx
+*.xls
+*.csv
+*.dump
+*.bak
+.scratch/

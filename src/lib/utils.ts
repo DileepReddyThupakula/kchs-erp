@@ -1,5 +1,8 @@
 export function cn(...classes: (string | false | null | undefined)[]) {
-  return classes.filter(Boolean).join(" ");
+  const tokens = classes.filter(Boolean).join(" ").split(/\s+/).filter(Boolean);
+  // a later explicit width (w-20, w-auto, w-56 ...) replaces an earlier w-full (the default width of form controls)
+  const widthAt = tokens.findLastIndex((t) => /^w-(?!full$)/.test(t));
+  return (widthAt < 0 ? tokens : tokens.filter((t, i) => !(t === "w-full" && i < widthAt))).join(" ");
 }
 
 /** Result shape returned by every server action used with useActionState. */
