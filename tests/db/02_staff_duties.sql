@@ -42,31 +42,31 @@ select pg_temp.counts('select count(*) from public.my_duties()', 8, 'admin: my_d
 -- Only Admin can grant / revoke
 -- =====================================================================
 select pg_temp.login_as('00000000-0000-4000-b000-000000000002');
-select pg_temp.throws($$insert into public.staff_permissions (staff_id, duty) values ('11000000-0000-4000-b000-000000000002', 'fee_collection')$$,
+select pg_temp.throws($$insert into public.staff_permissions (staff_id, duty) values ('11000000-0000-4000-b000-000000000002', 'student_records')$$,
   'teacher: cannot grant a duty to themselves', '42501');
-select pg_temp.throws($$insert into public.staff_permissions (staff_id, duty) values ('11000000-0000-4000-b000-000000000003', 'fee_collection')$$,
+select pg_temp.throws($$insert into public.staff_permissions (staff_id, duty) values ('11000000-0000-4000-b000-000000000003', 'student_records')$$,
   'teacher: cannot grant a duty to another teacher', '42501');
 
 select pg_temp.login_as('00000000-0000-4000-b000-000000000004');
-select pg_temp.throws($$insert into public.staff_permissions (staff_id, duty) values ('11000000-0000-4000-b000-000000000002', 'fee_collection')$$,
+select pg_temp.throws($$insert into public.staff_permissions (staff_id, duty) values ('11000000-0000-4000-b000-000000000002', 'student_records')$$,
   'legacy computer staff: cannot grant duties', '42501');
 
 select pg_temp.login_as('00000000-0000-4000-b000-000000000001');
 select pg_temp.lives($$insert into public.staff_permissions (staff_id, duty, granted_by) values ('11000000-0000-4000-b000-000000000002', 'timetable_edit', '00000000-0000-4000-b000-000000000004')$$,
   'admin: grants timetable_edit to teacher A');
-select pg_temp.lives($$insert into public.staff_permissions (staff_id, duty) values ('11000000-0000-4000-b000-000000000002', 'fee_collection')$$,
-  'admin: grants fee_collection to teacher A');
+select pg_temp.lives($$insert into public.staff_permissions (staff_id, duty) values ('11000000-0000-4000-b000-000000000002', 'student_records')$$,
+  'admin: grants student_records to teacher A');
 select pg_temp.counts($$select count(*) from public.staff_permissions where staff_id = '11000000-0000-4000-b000-000000000002' and duty = 'timetable_edit' and granted_by = '00000000-0000-4000-b000-000000000001'$$,
   1, 'granted_by is always the signed-in Admin (client value ignored)');
-select pg_temp.counts($$select count(*) from public.audit_logs where table_name = 'staff_permissions' and action = 'insert' and actor_role = 'admin' and new_data->>'duty' = 'fee_collection'$$,
+select pg_temp.counts($$select count(*) from public.audit_logs where table_name = 'staff_permissions' and action = 'insert' and actor_role = 'admin' and new_data->>'duty' = 'student_records'$$,
   1, 'grant is written to the audit log');
 
 -- =====================================================================
 -- With the duty: allowed. Other duties still off.
 -- =====================================================================
 select pg_temp.login_as('00000000-0000-4000-b000-000000000002');
-select pg_temp.ok(public.has_duty('fee_collection'), 'teacher with fee_collection: has_duty is true');
-select pg_temp.ok(not public.has_duty('student_records'), 'teacher with fee_collection: other duties stay off');
+select pg_temp.ok(public.has_duty('student_records'), 'teacher with student_records: has_duty is true');
+select pg_temp.ok(not public.has_duty('all_class_marks'), 'teacher with student_records: other duties stay off');
 select pg_temp.counts($$select count(*) from public.teacher_assignments where section_id = '33000000-0000-4000-b000-000000000002'$$,
   1, 'teacher with timetable_edit: sees all sections'' assignments');
 select pg_temp.counts($$select count(*) from public.staff_permissions where staff_id = '11000000-0000-4000-b000-000000000002'$$,
@@ -80,7 +80,7 @@ select pg_temp.throws($$insert into public.teacher_assignments (staff_id, sectio
 select pg_temp.counts($$select count(*) from public.staff where employee_code like 'DUTY-%'$$, 1, 'teacher with duties: still sees only own staff record');
 
 select pg_temp.login_as('00000000-0000-4000-b000-000000000003');
-select pg_temp.ok(not public.has_duty('fee_collection'), 'duties are per teacher (teacher B unaffected)');
+select pg_temp.ok(not public.has_duty('student_records'), 'duties are per teacher (teacher B unaffected)');
 select pg_temp.counts($$select count(*) from public.staff_permissions where staff_id = '11000000-0000-4000-b000-000000000002'$$,
   0, 'teacher: cannot see another teacher''s duties');
 
@@ -88,29 +88,34 @@ select pg_temp.counts($$select count(*) from public.staff_permissions where staf
 -- Revoke: stops working immediately
 -- =====================================================================
 select pg_temp.login_as('00000000-0000-4000-b000-000000000001');
-select pg_temp.affects($$delete from public.staff_permissions where staff_id = '11000000-0000-4000-b000-000000000002' and duty in ('timetable_edit', 'fee_collection')$$,
+select pg_temp.affects($$delete from public.staff_permissions where staff_id = '11000000-0000-4000-b000-000000000002' and duty in ('timetable_edit', 'student_records')$$,
   2, 'admin: revokes both duties');
-select pg_temp.counts($$select count(*) from public.audit_logs where table_name = 'staff_permissions' and action = 'delete' and actor_role = 'admin'$$,
+select pg_temp.counts($$select count(*) from public.audit_logs where table_name = 'staff_permissions' and action = 'delete' and actor_role = 'admin' and old_data->>'staff_id' = '11000000-0000-4000-b000-000000000002'$$,
   2, 'revokes are written to the audit log');
-select pg_temp.affects($$update public.staff_permissions set duty = 'student_records'$$, 0, 'duties cannot be edited in place (revoke + grant only)');
+select pg_temp.affects($$update public.staff_permissions set duty = 'all_class_marks'$$, 0, 'duties cannot be edited in place (revoke + grant only)');
 
 select pg_temp.login_as('00000000-0000-4000-b000-000000000002');
-select pg_temp.ok(not public.has_duty('fee_collection'), 'revoked duty stops working immediately (has_duty false)');
+select pg_temp.ok(not public.has_duty('student_records'), 'revoked duty stops working immediately (has_duty false)');
 select pg_temp.counts($$select count(*) from public.teacher_assignments where section_id = '33000000-0000-4000-b000-000000000002'$$,
   0, 'revoked timetable_edit: blocked again from other sections');
 
 -- =====================================================================
--- computer_staff: kept in the database, assignable by nobody
+-- Office staff (database role computer_staff): assignable by Admin; no implicit duties; fee access only by explicit grant
 -- =====================================================================
 select pg_temp.login_as('00000000-0000-4000-b000-000000000001');
-select pg_temp.throws($$update public.staff set app_role = 'computer_staff' where id = '11000000-0000-4000-b000-000000000003'$$,
-  'admin: cannot assign the Computer Staff role', 'P0001');
-select pg_temp.throws($$insert into public.staff (employee_code, full_name, app_role) values ('DUTY-NEW', 'New', 'computer_staff')$$,
-  'admin: cannot create a Computer Staff', 'P0001');
+select pg_temp.lives($$update public.staff set app_role = 'computer_staff' where id = '11000000-0000-4000-b000-000000000003'$$,
+  'admin: can assign the Office staff role');
+select pg_temp.lives($$insert into public.staff (employee_code, full_name, app_role) values ('DUTY-NEW', 'New', 'computer_staff')$$,
+  'admin: can create an Office staff member');
 select pg_temp.lives($$update public.staff set designation = 'Clerk' where id = '11000000-0000-4000-b000-000000000004'$$,
-  'admin: can still edit an existing legacy Computer Staff row');
-select pg_temp.lives($$update public.staff set app_role = 'teacher' where id = '11000000-0000-4000-b000-000000000004'$$,
-  'admin: can move a legacy Computer Staff to teacher');
+  'admin: can edit an Office staff row');
+select pg_temp.login_as('00000000-0000-4000-b000-000000000004');
+select pg_temp.counts('select count(*) from public.my_duties()', 0, 'office staff: no duties by default (the old "every duty" is gone)');
+select pg_temp.ok(not public.has_duty('student_records') and not public.has_duty('fee_collection'), 'office staff: has_duty false for everything until granted');
+select pg_temp.throws($$insert into public.staff_permissions (staff_id, duty) values ('11000000-0000-4000-b000-000000000004', 'student_records')$$, 'office staff: cannot grant themselves a duty', '42501');
+select pg_temp.logout();
+update public.staff set app_role = 'teacher' where id = '11000000-0000-4000-b000-000000000003';
+delete from public.staff where employee_code = 'DUTY-NEW';
 
 select pg_temp.login_as(null);
 select pg_temp.throws($$select public.has_duty('fee_collection')$$, 'anon: cannot call has_duty', '42501');

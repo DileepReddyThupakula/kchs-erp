@@ -1,8 +1,9 @@
 /**
- * Permission model v2 (see DECISIONS.md, R13):
- *   - Active roles: admin, teacher. computer_staff exists in the database
- *     for the future but can't be assigned and is hidden from the UI.
- *   - Teachers get extra module access only through duties granted by Admin.
+ * Permission model v3 (see DECISIONS.md, R13 and FA):
+ *   - Roles: admin, teacher, and Office staff (database name computer_staff).
+ *   - Teachers and office staff get module access only through duties granted by Admin.
+ *   - FEE access (the fee_collection duty) is for the Admin and for office staff only, one by one.
+ *     A teacher can never hold it, whatever other duties they have; the database refuses it.
  * This drives what the UI shows and what server actions allow; the database
  * RLS policies (public.has_duty) enforce the same rules independently.
  */
@@ -10,12 +11,12 @@ export type AppRole = "admin" | "computer_staff" | "teacher";
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   admin: "Admin",
-  computer_staff: "Computer Staff",
+  computer_staff: "Office staff",
   teacher: "Teacher",
 };
 
 /** Roles Admin can give in the UI. */
-export const ASSIGNABLE_ROLES = ["teacher", "admin"] as const;
+export const ASSIGNABLE_ROLES = ["teacher", "computer_staff", "admin"] as const;
 
 export const DUTIES = [
   "student_records",
@@ -80,11 +81,23 @@ export type Capability = (typeof ADMIN_ONLY)[number] | keyof typeof DUTY_CAPS;
 
 export type Permissions = { role: AppRole; duties: readonly Duty[] };
 
+/** Does this person hold the duty? Fee access is never held by a teacher (the database says the same). */
+export function holdsDuty(who: { role: AppRole; duties: readonly Duty[] }, duty: Duty): boolean {
+  if (who.role === "admin") return true;
+  if (duty === "fee_collection" && who.role !== "computer_staff") return false;
+  return who.duties.includes(duty);
+}
+
+/** Duties the Admin may tick for a person with this role (fee access: office staff only). */
+export function dutiesFor(role: AppRole): readonly Duty[] {
+  if (role === "admin") return [];
+  return role === "computer_staff" ? DUTIES : DUTIES.filter((d) => d !== "fee_collection");
+}
+
 export function can(who: Permissions | null | undefined, capability: Capability): boolean {
   if (!who) return false;
   if (who.role === "admin") return true;
   if ((ADMIN_ONLY as readonly string[]).includes(capability)) return false;
   const duty = DUTY_CAPS[capability as keyof typeof DUTY_CAPS];
-  // dormant computer_staff role keeps its old access = every duty
-  return who.role === "computer_staff" || who.duties.includes(duty);
+  return holdsDuty(who, duty);
 }

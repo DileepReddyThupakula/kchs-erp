@@ -74,12 +74,12 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
             <LoginPanel staffId={s.id} hasLogin={!!s.user_id} role={s.app_role} email={s.email} isSelf={s.id === me.staffId} />
           )}
         </Card>
-        {s.app_role === "teacher" && (
+        {(s.app_role === "teacher" || s.app_role === "computer_staff") && (
           <Card className="lg:col-start-2">
             <h2 className="mb-1 font-semibold text-navy-900">Duties</h2>
-            <p className="mb-3 text-xs text-muted">Extra office work this teacher may do. Without duties they only see their own classes and subjects.</p>
+            <p className="mb-3 text-xs text-muted">{s.app_role === "computer_staff" ? "What this office person may do. Fee access is only ever given here, one person at a time, and can be removed at any time." : "Extra office work this teacher may do. Without duties they only see their own classes and subjects. Fee access is not available to teachers."}</p>
             {can(me, "duties.manage") ? (
-              <DutiesPanel staffId={s.id} granted={duties} />
+              <DutiesPanel staffId={s.id} granted={duties} role={s.app_role} />
             ) : duties.length ? (
               <div className="flex flex-wrap gap-1.5">
                 {duties.map((d) => (

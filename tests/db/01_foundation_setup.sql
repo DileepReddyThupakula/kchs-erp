@@ -90,8 +90,8 @@ select pg_temp.throws($$insert into public.sections (academic_year_id, class_id,
 select pg_temp.throws($$insert into public.subjects (name) values ('TEST CS Subject')$$, 'computer staff: cannot create subject', '42501');
 select pg_temp.throws($$insert into public.teacher_assignments (staff_id, section_id, subject_id) values ('10000000-0000-4000-a000-000000000003', '31000000-0000-4000-a000-000000000002', '40000000-0000-4000-a000-000000000002')$$, 'computer staff: cannot create teacher assignment', '42501');
 select pg_temp.affects($$delete from public.teacher_assignments where section_id = '31000000-0000-4000-a000-000000000002'$$, 0, 'computer staff: cannot delete teacher assignment');
-select pg_temp.counts($$select count(*) from public.teacher_assignments where section_id in ('31000000-0000-4000-a000-000000000001', '31000000-0000-4000-a000-000000000002')$$, 3, 'computer staff: sees all teacher assignments');
-select pg_temp.counts($$select count(*) from public.staff where employee_code like 'TEST-%'$$, 6, 'computer staff: views all staff records');
+select pg_temp.counts($$select count(*) from public.teacher_assignments where section_id in ('31000000-0000-4000-a000-000000000001', '31000000-0000-4000-a000-000000000002')$$, 0, 'office staff (no duty): sees no teacher assignments');
+select pg_temp.counts($$select count(*) from public.staff where employee_code like 'TEST-%'$$, 1, 'office staff (no duty): sees only their own staff record');
 select pg_temp.throws($$insert into public.staff (employee_code, full_name) values ('TEST-CS2', 'Sneaky')$$, 'computer staff: cannot create staff', '42501');
 select pg_temp.affects($$update public.staff set phone = '9999999999' where employee_code = 'TEST-T1'$$, 0, 'computer staff: cannot edit staff');
 select pg_temp.affects($$update public.staff set app_role = 'admin' where employee_code = 'TEST-CS'$$, 0, 'computer staff: cannot promote self to admin');

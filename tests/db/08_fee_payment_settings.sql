@@ -5,7 +5,7 @@ select pg_temp.fixture_user('00000000-0000-4000-f200-000000000002', 'duty@pay.te
 select pg_temp.fixture_user('00000000-0000-4000-f200-000000000003', 'plain@pay.test');
 insert into public.staff (id, user_id, app_role, employee_code, full_name) values
   ('17000000-0000-4000-f200-000000000001', '00000000-0000-4000-f200-000000000001', 'admin',   'PAY-ADM', 'Pay Admin'),
-  ('17000000-0000-4000-f200-000000000002', '00000000-0000-4000-f200-000000000002', 'teacher', 'PAY-DUT', 'Pay Duty'),
+  ('17000000-0000-4000-f200-000000000002', '00000000-0000-4000-f200-000000000002', 'computer_staff', 'PAY-DUT', 'Pay Duty'),
   ('17000000-0000-4000-f200-000000000003', '00000000-0000-4000-f200-000000000003', 'teacher', 'PAY-PLN', 'Pay Plain');
 insert into public.staff_permissions (staff_id, duty) values ('17000000-0000-4000-f200-000000000002', 'fee_collection');
 

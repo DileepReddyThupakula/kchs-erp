@@ -10,7 +10,9 @@ const phone = (n) => `90000${String(n).padStart(5, "0")}`;
 // Admin login and one "office duties" teacher login for trying the app.
 export const DEMO_STAFF = [
   ["DEMO-ADM", "Demo Admin", "male", "Headmaster", "Administration", "admin", "admin"],
-  ["DEMO-CS", "Demo Office Teacher", "female", "Teacher (office duties)", "Office", "teacher", "office"],
+  ["DEMO-CS", "Demo Office Teacher", "female", "Teacher (office duties, no fee access)", "Office", "teacher", "office"],
+  ["DEMO-FEE", "Demo Fee Clerk", "female", "Office staff (fee collection)", "Office", "computer_staff", "fees"],
+  ["DEMO-DESK", "Demo Front Office", "male", "Office staff (no fee access)", "Office", "computer_staff", "desk"],
   ["DEMO-T01", "Ramesh Babu K", "male", "School Assistant (Mathematics)", "High School", "teacher", "teacher1"],
   ["DEMO-T02", "Padmavathi S", "female", "School Assistant (English)", "High School", "teacher", "teacher2"],
   ["DEMO-T03", "Venkata Subbaiah P", "male", "School Assistant (Physical Science)", "High School"],
@@ -49,7 +51,10 @@ export const DEMO_STAFF = [
 
 /** Duties for demo teachers (employee code -> duties). */
 export const DEMO_DUTIES = {
-  "DEMO-CS": ["fee_collection", "student_records", "timetable_edit", "all_class_attendance", "notices_diary", "all_class_marks"],
+  // fee access is for office staff only (never a teacher): see DECISIONS.md FA
+  "DEMO-FEE": ["fee_collection"],
+  "DEMO-DESK": ["student_records", "notices_diary"],
+  "DEMO-CS": ["student_records", "timetable_edit", "all_class_attendance", "notices_diary", "all_class_marks"],
 };
 
 /**

@@ -1,7 +1,7 @@
 // School UPI / QR settings and payment rules through the real Supabase API (read-only).
 import { createClient } from "@supabase/supabase-js";
 
-export const name = "payment settings via the API (teacher1 without duty, office teacher with duty)";
+export const name = "payment settings via the API (teacher1 without duty, office staff with fee access)";
 
 async function signIn(url, anon, email, password) {
   const c = createClient(url, anon, { auth: { persistSession: false } });
@@ -22,15 +22,15 @@ export default async function run({ ok, skip }) {
   } finally {
     await t1.auth.signOut();
   }
-  const office = await signIn(url, anon, "office@demo.kchs.test", pw);
-  if (!office) return skip("could not sign in as office teacher");
+  const office = await signIn(url, anon, "fees@demo.kchs.test", pw);
+  if (!office) return skip("could not sign in as the fee clerk");
   try {
     const { data } = await office.from("fee_settings").select("upi_id, payee_name, require_upi_reference");
-    ok((data ?? []).length === 1, "API office teacher (fee duty): can read the settings to show the QR");
+    ok((data ?? []).length === 1, "API office staff (fee access) (fee duty): can read the settings to show the QR");
     const { data: upd, error } = await office.from("fee_settings").update({ upi_id: "hacker@upi" }).eq("id", 1).select();
-    ok(!error && (upd ?? []).length === 0, "API office teacher: cannot change the UPI id");
+    ok(!error && (upd ?? []).length === 0, "API office staff (fee access): cannot change the UPI id");
     const { error: upErr } = await office.storage.from("payment-qr").upload(`hack-${Date.now()}.png`, new Blob([new Uint8Array([1])], { type: "image/png" }), { contentType: "image/png" });
-    ok(!!upErr, "API office teacher: cannot upload a QR image");
+    ok(!!upErr, "API office staff (fee access): cannot upload a QR image");
     const { data: after } = await office.from("fee_settings").select("upi_id");
     ok(after?.[0]?.upi_id !== "hacker@upi", "the UPI id is unchanged");
   } finally {

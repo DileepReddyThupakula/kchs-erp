@@ -2,7 +2,7 @@
 // duty (even a class teacher), full read + collect with it. Read-only.
 import { createClient } from "@supabase/supabase-js";
 
-export const name = "fees via the API (teacher1 without duty, office teacher with duty)";
+export const name = "fees via the API (teacher1 without duty, office staff with fee access)";
 
 async function signIn(url, anon, email, password) {
   const c = createClient(url, anon, { auth: { persistSession: false } });
@@ -31,15 +31,15 @@ export default async function run({ ok, skip }) {
     await t1.auth.signOut();
   }
 
-  const office = await signIn(url, anon, "office@demo.kchs.test", pw);
-  if (!office) return skip("could not sign in as office teacher");
+  const office = await signIn(url, anon, "fees@demo.kchs.test", pw);
+  if (!office) return skip("could not sign in as the fee clerk");
   try {
     const { count } = await office.from("student_fee_dues").select("id", { count: "exact", head: true });
-    ok(count === dues, `API office teacher (fee_collection): sees all ${dues} dues`, `got ${count}`);
+    ok(count === dues, `API office staff (fee access): sees all ${dues} dues`, `got ${count}`);
     const { error: upErr, count: upCount } = await office.from("fee_structure").update({ amount_paise: 1 }, { count: "exact" }).gt("amount_paise", 0);
-    ok(!upErr && upCount === 0, "API office teacher: cannot change fee amounts");
+    ok(!upErr && upCount === 0, "API office staff (fee access): cannot change fee amounts");
     const { error: cancelErr } = await office.rpc("cancel_fee_receipt", { p_receipt_id: "00000000-0000-0000-0000-000000000000", p_reason: "test" });
-    ok(!!cancelErr, "API office teacher: cannot cancel receipts");
+    ok(!!cancelErr, "API office staff (fee access): cannot cancel receipts");
   } finally {
     await office.auth.signOut();
   }

@@ -33,9 +33,9 @@ export async function seedDemoFees() {
     if (done[0].n > 0) return console.log(`Demo fee data already present (${done[0].n} receipts). Wipe first to reseed.`);
     const { rows: y } = await db.query("select id, name, start_date from public.academic_years where is_current");
     if (!y.length) throw new Error("No current academic year");
-    const { rows: users } = await db.query("select employee_code, user_id from public.staff where employee_code in ('DEMO-ADM','DEMO-CS') and user_id is not null");
+    const { rows: users } = await db.query("select employee_code, user_id from public.staff where employee_code in ('DEMO-ADM','DEMO-FEE') and user_id is not null");
     const adminUser = users.find((u) => u.employee_code === "DEMO-ADM")?.user_id;
-    const officeUser = users.find((u) => u.employee_code === "DEMO-CS")?.user_id;
+    const officeUser = users.find((u) => u.employee_code === "DEMO-FEE")?.user_id;
     if (!adminUser || !officeUser) throw new Error("Demo admin / office logins missing (run seed:demo)");
     const { rows: students } = await db.query(
       `select s.id, s.admission_no, substring(s.admission_no from 6)::int as n from public.students s
@@ -109,7 +109,7 @@ export async function seedDemoFees() {
       receipts++;
     }
     for (const { s, mode, ref } of partial) {
-      // part of the first due, collected today by the office teacher
+      // part of the first due, collected today by the office fee clerk
       const { rows: first } = await db.query(
         `select amount_paise - concession_paise - paid_paise as bal from public.student_fee_dues
           where student_id = $1 and voided_at is null order by due_date, installment_seq limit 1`,

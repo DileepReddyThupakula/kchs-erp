@@ -12,7 +12,7 @@ insert into public.staff (id, user_id, app_role, employee_code, full_name) value
   ('12000000-0000-4000-c000-000000000002', '00000000-0000-4000-c000-000000000002', 'teacher', 'SCOPE-T1',  'Scope T1'),
   ('12000000-0000-4000-c000-000000000003', '00000000-0000-4000-c000-000000000003', 'teacher', 'SCOPE-T2',  'Scope T2'),
   ('12000000-0000-4000-c000-000000000004', '00000000-0000-4000-c000-000000000004', 'teacher', 'SCOPE-T3',  'Scope T3 (no classes)'),
-  ('12000000-0000-4000-c000-000000000005', '00000000-0000-4000-c000-000000000005', 'teacher', 'SCOPE-T4',  'Scope T4 (fee duty)');
+  ('12000000-0000-4000-c000-000000000005', '00000000-0000-4000-c000-000000000005', 'computer_staff', 'SCOPE-T4',  'Scope T4 (office, fee duty)');
 insert into public.staff_permissions (staff_id, duty) values ('12000000-0000-4000-c000-000000000005', 'fee_collection');
 
 insert into public.academic_years (id, name, start_date, end_date) values

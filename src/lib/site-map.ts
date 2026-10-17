@@ -39,7 +39,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { DUTY_INFO, type AppRole, type Duty } from "@/lib/auth/permissions";
+import { DUTY_INFO, holdsDuty, type AppRole, type Duty } from "@/lib/auth/permissions";
 
 /** Planned modules, in build order (names, not numbers). */
 export const MODULES = [
@@ -157,9 +157,9 @@ export type Who = { role: AppRole; duties: readonly Duty[] };
 export function canOpenPage(page: PageDef, who: Who): boolean {
   const a = page.access;
   if (who.role === "admin") return !!a.admin;
-  // dormant computer_staff role = every duty (old Phase-1 access)
-  if (who.role === "computer_staff") return !!a.duty;
-  return !!a.teacher || (!!a.duty && who.duties.includes(a.duty));
+  // teachers and office staff: pages open to every staff member, plus the pages of the duties they hold
+  // (fee pages: office staff with fee access only, never a teacher)
+  return !!a.teacher || (!!a.duty && holdsDuty(who, a.duty));
 }
 
 /** Plain-language "who can use this page". */

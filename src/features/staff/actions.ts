@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireCapability } from "@/lib/auth/session";
-import { ASSIGNABLE_ROLES, DUTIES, type Duty } from "@/lib/auth/permissions";
+import { ASSIGNABLE_ROLES, DUTIES, dutiesFor, type Duty } from "@/lib/auth/permissions";
 import { friendlyDbError, type ActionState } from "@/lib/utils";
 
 const opt = z
@@ -148,7 +148,9 @@ export async function saveDuties(_: ActionState, fd: FormData): Promise<ActionSt
 
   const supabase = await createClient();
   const { data: staff } = await supabase.from("staff").select("app_role").eq("id", staff_id).single();
-  if (staff?.app_role !== "teacher") return { error: "Duties are only for teachers. Admin already has full access." };
+  if (staff?.app_role !== "teacher" && staff?.app_role !== "computer_staff") return { error: "Duties are only for teachers and office staff. Admin already has full access." };
+  const allowed = new Set<string>(dutiesFor(staff.app_role));
+  if ([...wanted].some((d) => !allowed.has(d))) return { error: "Fee access can only be given to office staff, never to a teacher." };
 
   const { data: current, error: readErr } = await supabase.from("staff_permissions").select("duty").eq("staff_id", staff_id);
   if (readErr) return { error: friendlyDbError(readErr) };

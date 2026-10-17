@@ -7,7 +7,7 @@ select pg_temp.fixture_user('00000000-0000-4000-f000-000000000002', 'feeduty@fee
 select pg_temp.fixture_user('00000000-0000-4000-f000-000000000003', 'teacher@fee.test');
 insert into public.staff (id, user_id, app_role, employee_code, full_name) values
   ('15000000-0000-4000-f000-000000000001', '00000000-0000-4000-f000-000000000001', 'admin',   'FEE-ADM', 'Fee Admin'),
-  ('15000000-0000-4000-f000-000000000002', '00000000-0000-4000-f000-000000000002', 'teacher', 'FEE-DUT', 'Fee Duty Teacher'),
+  ('15000000-0000-4000-f000-000000000002', '00000000-0000-4000-f000-000000000002', 'computer_staff', 'FEE-DUT', 'Fee Office Staff'),
   ('15000000-0000-4000-f000-000000000003', '00000000-0000-4000-f000-000000000003', 'teacher', 'FEE-TCH', 'Fee Plain Teacher');
 insert into public.staff_permissions (staff_id, duty) values ('15000000-0000-4000-f000-000000000002', 'fee_collection');
 

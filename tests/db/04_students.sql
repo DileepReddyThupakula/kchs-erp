@@ -17,7 +17,7 @@ insert into public.staff (id, user_id, app_role, employee_code, full_name) value
   ('13000000-0000-4000-d000-000000000003', '00000000-0000-4000-d000-000000000003', 'teacher', 'STU-GOV', 'Stu GovIds (class teacher S1)'),
   ('13000000-0000-4000-d000-000000000004', '00000000-0000-4000-d000-000000000004', 'teacher', 'STU-T1',  'Stu T1 (S1)'),
   ('13000000-0000-4000-d000-000000000005', '00000000-0000-4000-d000-000000000005', 'teacher', 'STU-T2',  'Stu T2 (S2)'),
-  ('13000000-0000-4000-d000-000000000006', '00000000-0000-4000-d000-000000000006', 'teacher', 'STU-FEE', 'Stu Fee'),
+  ('13000000-0000-4000-d000-000000000006', '00000000-0000-4000-d000-000000000006', 'computer_staff', 'STU-FEE', 'Stu Fee (office)'),
   ('13000000-0000-4000-d000-000000000007', '00000000-0000-4000-d000-000000000007', 'teacher', 'STU-NONE', 'Stu None');
 insert into public.staff_permissions (staff_id, duty) values
   ('13000000-0000-4000-d000-000000000002', 'student_records'),

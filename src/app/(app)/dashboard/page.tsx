@@ -75,7 +75,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     me.role === "admin"
       ? ((await supabase.rpc("admin_dashboard", { p_year: year?.id ?? "00000000-0000-0000-0000-000000000000", p_today: today })).data as unknown as AdminDashboardData | null)
       : null;
-  const stats = me.role === "teacher" ? await teacherStats() : schoolStats();
+  const stats = me.role === "teacher" ? await teacherStats() : me.role === "admin" ? schoolStats() : [];
 
   // Teachers see their own numbers only (scope rule R18).
   async function teacherStats(): Promise<Stat[]> {
@@ -183,7 +183,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </div>
         </Card>
 
-        {me.role === "teacher" && (
+        {me.role !== "admin" && (
           <Card>
             <h2 className="mb-1 font-semibold text-navy-900">Your duties</h2>
             {me.duties.length ? (
@@ -195,7 +195,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted">No extra duties. You see your own classes and subjects. The Admin can give you duties such as fee collection.</p>
+              <p className="text-sm text-muted">No extra duties. You see your own classes and subjects. The Admin can give you duties such as attendance for all classes.</p>
             )}
           </Card>
         )}

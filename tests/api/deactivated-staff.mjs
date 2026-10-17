@@ -45,7 +45,7 @@ export default async function run({ ok, skip }) {
     const { data: st, error: e2 } = await admin.from("staff").insert({ employee_code: `TST-${label}-${stamp}`.slice(0, 30), full_name: `Test ${label}`, app_role: role, user_id: u.user.id, email, status: "active" }).select("id").single();
     if (e2) throw new Error(e2.message);
     if (role === "teacher") {
-      const duties = ["student_records", "fee_collection", "all_class_attendance", "all_class_marks", "notices_diary", "timetable_edit", "certificates_idcards", "government_ids_view"];
+      const duties = ["student_records", "all_class_attendance", "all_class_marks", "notices_diary", "timetable_edit", "certificates_idcards", "government_ids_view"];
       const { error: e3 } = await admin.from("staff_permissions").insert(duties.map((duty) => ({ staff_id: st.id, duty })));
       if (e3) throw new Error(e3.message);
       // also a class teacher, so the class-teacher paths are covered
