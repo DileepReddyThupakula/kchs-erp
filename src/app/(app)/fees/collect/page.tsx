@@ -5,9 +5,8 @@ import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
 import { EmptyState, PageHeader } from "@/components/ui/card";
-import { getCollectRows, getFeeHeads, getReceiptDetail, getFeeSettings, getStudentLookup } from "@/features/fees/queries";
+import { getCollectPage, getReceiptDetail, getStudentLookup } from "@/features/fees/queries";
 import { todayIst } from "@/features/fees/shared";
-import { getSectionOptions } from "@/features/students/queries";
 import type { CollectShow } from "@/features/fees/collect-list";
 import { CollectList } from "./list";
 import { CollectPanel } from "./client";
@@ -38,8 +37,10 @@ export default async function CollectFeePage({
   const classId = uuidRe.test(sp.class ?? "") ? sp.class! : "";
   const sectionId = uuidRe.test(sp.section ?? "") ? sp.section! : "";
   const show: CollectShow = sp.show === "all" || sp.show === "overdue" ? sp.show : "pending";
-  const [rows, settings, sections] = await Promise.all([getCollectRows(supabase, year.id, todayIst()), getFeeSettings(supabase), getSectionOptions(supabase, year.id)]);
-  const qr = { upiId: settings.upiId, payeeName: settings.payeeName, qrUrl: settings.qrUrl };
+  // one database call for the whole page (fee access is checked by the database too)
+  const page = await getCollectPage(supabase, year.id, todayIst());
+  const { rows, sections, qr } = page;
+  const settings = { requireUpiReference: page.requireUpiReference };
 
   // ---- one student: the collection screen
   if (uuidRe.test(sp.student ?? "")) {
@@ -75,13 +76,8 @@ export default async function CollectFeePage({
   const savedDetail = saved ? await getReceiptDetail(supabase, saved.id) : null;
   const receiptSchool = savedDetail ? await getReceiptSchool() : null;
   const isAdmin = can(me, "fees.setup");
-  let pickerStudents: { id: string; name: string; adm: string; classLabel: string; phones: string[] }[] = [];
-  let miscHeads: { id: string; name: string }[] = [];
-  if (isAdmin) {
-    const [lookup, { regular }] = await Promise.all([getStudentLookup(supabase, year.id), getFeeHeads(supabase)]);
-    pickerStudents = lookup.filter((s) => s.status === "active").map((s) => ({ id: s.id, name: s.name, adm: s.adm, classLabel: s.classLabel, phones: s.phones }));
-    miscHeads = regular.filter((h) => h.is_active).map((h) => ({ id: h.id, name: h.name }));
-  }
+  const pickerStudents = isAdmin ? page.picker : [];
+  const miscHeads = isAdmin ? page.miscHeads : [];
   const classes = [...new Map(sections.map((s) => [s.classId, { id: s.classId, name: s.className, order: s.classOrder }])).values()].sort((a, b) => a.order - b.order);
   return (
     <>

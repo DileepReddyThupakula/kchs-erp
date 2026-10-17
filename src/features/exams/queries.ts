@@ -71,3 +71,51 @@ export async function pickSection(supabase: Supa, sections: SectionOpt[], yearId
   const withScheme = new Set((data ?? []).map((g) => g.class_id));
   return sections.find((s) => withScheme.has(s.classId)) ?? sections[0];
 }
+
+
+// ------------------------------------------------------------------ one-call pages (public.marks_page / public.results_page)
+type SchemeJson = {
+  mode: Mode;
+  components: { id: string; name: string; max_marks: number | string; sort_order: number; locked_at: string | null; lock_note: string | null }[];
+  groups: SchemeData["groups"];
+  members: { id: string; group_id: string; component_id: string | null; child_group_id: string | null; scale_to: number | string | null; sort_order: number }[];
+  subjectMax: { component_id: string; subject_id: string; max_marks: number | string }[];
+  passMarks: Record<string, number | string>;
+  subjects: ClassSubject[];
+};
+/** The scheme as the pages use it, from the JSON the page functions return. */
+export function schemeFromJson(j: SchemeJson): SchemeData & { subjects: ClassSubject[] } {
+  return {
+    mode: j.mode,
+    components: j.components.map((c) => ({ ...c, max_marks: Number(c.max_marks) })),
+    groups: j.groups,
+    members: j.members.map((m) => ({ id: m.id, group_id: m.group_id, component_id: m.component_id, child_group_id: m.child_group_id, sort_order: m.sort_order, scale_to: m.scale_to == null ? null : Number(m.scale_to) })),
+    subjectMax: j.subjectMax.map((o) => ({ component_id: o.component_id, subject_id: o.subject_id, max_marks: Number(o.max_marks) })),
+    passMarks: new Map(Object.entries(j.passMarks).map(([k, v]) => [k, Number(v)])),
+    subjects: j.subjects,
+  };
+}
+export type PageResult = { student_id: string; group_id: string; subject_id: string; scored: number | string; max_marks: number | string; pct: number | string; grade: string | null; grade_point: number | string | null; pass_percent: number | string; passed: boolean; missing: number; has_absent: boolean; locked: boolean };
+export type MarksPage = {
+  all: boolean;
+  sections: SectionOpt[];
+  section?: SectionOpt;
+  scheme?: SchemeJson;
+  subjects?: ClassSubject[];
+  subject_id?: string | null;
+  component_id?: string | null;
+  students?: { id: string; roll: number | null; name: string; adm: string }[];
+  marks?: Record<string, { status: "marked" | "absent" | "na"; marks: number | string | null }>;
+  results?: PageResult[];
+  pending?: number;
+};
+export type ResultsPage = {
+  all: boolean;
+  sections: SectionOpt[];
+  section?: SectionOpt;
+  scheme?: SchemeJson;
+  group_id?: string | null;
+  students?: { id: string; roll: number | null; name: string }[];
+  results?: PageResult[];
+  totals?: { student_id: string; scored: number | string; max_marks: number | string; pct: number | string; grade: string | null; grade_point: number | string | null; result: "pass" | "fail" | "incomplete" }[];
+};

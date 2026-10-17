@@ -107,3 +107,9 @@ if (who === "dashboards") {
     await run(label, email, [["Dashboard", "/dashboard"]]);
   }
 }
+// the heavy pages:  node --env-file=.env.local scripts/perf-measure.mjs <base> heavy
+if (who === "heavy") {
+  await run("Admin", "admin@demo.kchs.test", [["Fees: Collect", "/fees/collect"], ["Exams & marks", "/exams/marks"], ["Exam results", "/exams/results"]]);
+  await run("Office (fees)", "fees@demo.kchs.test", [["Fees: Collect", "/fees/collect"]]);
+  await run("Teacher", "teacher1@demo.kchs.test", [["Exams & marks", "/exams/marks"], ["Exam results", "/exams/results"]]);
+}

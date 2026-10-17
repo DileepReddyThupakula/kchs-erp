@@ -738,6 +738,9 @@ export type Database = {
       report_my_load: { Args: { p_year: string; p_today?: string }; Returns: Json };
       log_report: { Args: { p_report: string; p_format: string; p_filters?: Json; p_rows?: number }; Returns: undefined };
       staff_dashboard: { Args: { p_year: string; p_today: string }; Returns: Json };
+      collect_page: { Args: { p_year: string; p_today: string }; Returns: Json };
+      marks_page: { Args: { p_year: string; p_section?: string; p_component?: string; p_subject?: string }; Returns: Json };
+      results_page: { Args: { p_year: string; p_section?: string; p_group?: string }; Returns: Json };
       admin_dashboard: { Args: { p_year: string; p_today: string }; Returns: Json };
       notice_read_counts: { Args: never; Returns: { notice_id: string; read_count: number; total: number }[] };
       subject_result_calc: { Args: { p_student: string; p_group: string; p_subject: string }; Returns: Json };

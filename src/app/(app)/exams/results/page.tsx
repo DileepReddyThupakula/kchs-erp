@@ -5,7 +5,7 @@ import { resolveYear } from "@/lib/settings";
 import { EmptyState } from "@/components/ui/card";
 import { ParamSelect } from "@/components/ui/param-select";
 import { ResultsTable, type ResultRow, type ResultSubject } from "@/components/exams/results-table";
-import { getClassSubjects, getExamSections, getScheme, pickSection } from "@/features/exams/queries";
+import { schemeFromJson, type ResultsPage } from "@/features/exams/queries";
 
 export const metadata = { title: "Exam results" };
 
@@ -16,20 +16,22 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
   const all = can(me, "marks.enterAll");
   const year = await resolveYear();
   if (!year) return <EmptyState title="No academic year yet">The Admin hasn&apos;t set up the current academic year.</EmptyState>;
-  const sections = await getExamSections(supabase, me, year.id);
-  if (!sections.length) return <EmptyState title="No sections">You have no sections to show.</EmptyState>;
-  const section = await pickSection(supabase, sections, year.id, sp.section);
-  const [scheme, subjects] = await Promise.all([getScheme(supabase, year.id, section.classId), getClassSubjects(supabase, year.id, section.classId)]);
-  if (scheme.mode !== "marks") return <EmptyState title={`${section.className} uses grades, not marks`}>There are no marks results for this class. See “Grades & remarks”.</EmptyState>;
+  // ONE database call: sections, scheme, students, results and (Admin / marks duty) the overall totals
+  const { data, error } = await supabase.rpc("results_page", { p_year: year.id, p_section: sp.section || undefined, p_group: sp.group || undefined });
+  if (error) throw error;
+  const page = data as unknown as ResultsPage;
+  const sections = page.sections;
+  if (!sections.length || !page.section || !page.scheme) return <EmptyState title="No sections">You have no sections to show.</EmptyState>;
+  const section = page.section;
+  const scheme = schemeFromJson(page.scheme);
+  const subjects = scheme.subjects;
+  if (scheme.mode !== "marks") return <EmptyState title={`${section.className} uses grades, not marks`}>There are no marks results for this class. See “Grades &amp; remarks”.</EmptyState>;
   const groups = scheme.groups.filter((g) => g.kind !== "part");
   if (!groups.length) return <EmptyState title="No results set up for this class">The Admin sets up terms and the final result on the Scheme tab.</EmptyState>;
-  const group = groups.find((g) => g.id === sp.group) ?? groups[0];
-
-  const [{ data: enr }, { data: sr }, { data: tot }] = await Promise.all([
-    supabase.from("student_enrollments").select("student_id, roll_no, students!inner(full_name)").eq("section_id", section.id).eq("status", "active"),
-    supabase.from("subject_results").select("student_id, subject_id, scored, max_marks, pct, grade, grade_point, pass_percent, passed, missing, has_absent, locked").eq("group_id", group.id).eq("section_id", section.id),
-    all ? supabase.from("student_results").select("student_id, scored, max_marks, pct, grade, grade_point, result").eq("group_id", group.id).eq("section_id", section.id) : Promise.resolve({ data: [] }),
-  ]);
+  const group = groups.find((g) => g.id === page.group_id) ?? groups[0];
+  const enr = (page.students ?? []).map((s) => ({ student_id: s.id, roll_no: s.roll, students: { full_name: s.name } }));
+  const sr = page.results ?? [];
+  const tot = page.totals ?? [];
   const nm = new Map((enr ?? []).map((e) => [e.student_id, e.students?.full_name ?? ""]));
   const seen = new Set((sr ?? []).map((r) => r.subject_id));
   const cols: ResultSubject[] = subjects.filter((s) => s.type === "scholastic" && (all || seen.size === 0 || seen.has(s.id))).map((s) => ({ id: s.id, name: s.name }));
