@@ -25,7 +25,11 @@ export function GovernmentExport({ yearName, sections, students }: { yearName: s
 
   async function run() {
     setBusy(true);
-    const res = await governmentExportRows({ studentIds: chosen.map((s) => s.id), includeFullIds: fullIds });
+    const res = await governmentExportRows({
+      studentIds: chosen.map((s) => s.id),
+      includeFullIds: fullIds,
+      filters: { class: classes.find(([id]) => id === classId)?.[1] ?? "All classes", section: sections.find((s) => s.id === sectionId)?.label ?? "All sections", status: status || "All" },
+    });
     setBusy(false);
     if (res.error || !res.headers) return toast.error(res.error ?? "Export failed.");
     await exportSheets(`government-export-${yearName}${fullIds ? "-FULL-IDS" : ""}`, "xlsx", [{ name: "Students", headers: res.headers, rows: res.rows ?? [] }]);

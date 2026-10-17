@@ -63,3 +63,19 @@ select pg_temp.login_as('00000000-0000-4000-fc10-000000000004');
 select pg_temp.ok(public.staff_dashboard('2a100000-0000-4000-fc10-000000000001', '2078-03-31') -> 'fees' = 'null'::jsonb, 'access removed: the fees block disappears at once');
 select pg_temp.login_as(null);
 select pg_temp.throws($$select public.staff_dashboard('2a100000-0000-4000-fc10-000000000001', '2077-04-10')$$, 'anonymous: nothing', '42501');
+
+-- ================= the teacher's diary card and "today" strip come from the same call
+select pg_temp.logout();
+insert into public.academic_years (id, name, start_date, end_date) values ('2a100000-0000-4000-fc10-000000000002', 'DB-NOW', app.today_ist() - 30, app.today_ist() + 300);
+insert into public.sections (id, academic_year_id, class_id, name, class_teacher_id) values ('3b400000-0000-4000-fc10-000000000002', '2a100000-0000-4000-fc10-000000000002', '3a400000-0000-4000-fc10-000000000001', 'N', '1a100000-0000-4000-fc10-000000000002');
+insert into public.teacher_assignments (staff_id, section_id, subject_id) values ('1a100000-0000-4000-fc10-000000000002', '3b400000-0000-4000-fc10-000000000002', '5e100000-0000-4000-fc10-000000000001');
+select pg_temp.login_as('00000000-0000-4000-fc10-000000000002');
+select pg_temp.counts($$select jsonb_array_length(public.staff_dashboard('2a100000-0000-4000-fc10-000000000002', app.today_ist()) -> 'diary_todo')$$, 2, 'diary card: the Maths line and the class remark are still to submit');
+select pg_temp.counts($$select count(*) from jsonb_array_elements(public.staff_dashboard('2a100000-0000-4000-fc10-000000000002', app.today_ist()) -> 'diary_todo') x where x ->> 'subject' is null and x ->> 'status' = 'new'$$, 1, 'diary card: the class remark is "not started"');
+select pg_temp.ok(jsonb_typeof(public.staff_dashboard('2a100000-0000-4000-fc10-000000000002', app.today_ist()) -> 'today') = 'array', 'the "today" periods come in the same call');
+select pg_temp.login_as('00000000-0000-4000-fc10-000000000005');
+select pg_temp.counts($$select jsonb_array_length(public.staff_dashboard('2a100000-0000-4000-fc10-000000000002', app.today_ist()) -> 'diary_todo')$$, 0, 'office staff: no diary to submit');
+select pg_temp.login_as('00000000-0000-4000-fc10-000000000003');
+select pg_temp.ok(jsonb_typeof(public.staff_dashboard('2a100000-0000-4000-fc10-000000000002', app.today_ist()) -> 'diary_board') = 'array', 'the notices & diary duty gets the class-diary board');
+select pg_temp.login_as('00000000-0000-4000-fc10-000000000002');
+select pg_temp.ok(public.staff_dashboard('2a100000-0000-4000-fc10-000000000002', app.today_ist()) -> 'diary_board' = 'null'::jsonb, 'a plain teacher does not');

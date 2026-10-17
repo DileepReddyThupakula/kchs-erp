@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -21,13 +20,10 @@ import { can, DUTY_INFO, type Capability } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { getSchoolSettings, resolveYear } from "@/lib/settings";
 import { detailsChecklist } from "@/features/settings/missing";
-import { getMyClasses } from "@/features/my/queries";
 import { formatDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
-import { TodayStrip } from "@/components/timetable/today-strip";
-import { AttendanceDashboard } from "@/components/attendance/dashboard-card";
-import { NoticesDashboard } from "@/components/notices/dashboard-cards";
 import { AdminDashboardCards, type AdminDashboardData } from "@/components/dashboard/admin-cards";
+import { StaffDashboardCards, type StaffDashboardData } from "@/components/dashboard/staff-cards";
 import { todayIst } from "@/features/fees/shared";
 import { cn } from "@/lib/utils";
 
@@ -69,25 +65,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const checklist = can(me, "settings.edit") ? detailsChecklist(settings) : [];
   const actions = QUICK_ACTIONS.filter((a) => (a.teacherOnly ? me.role === "teacher" : !a.cap || can(me, a.cap)));
-  // Admin: everything on the page comes from ONE database call (public.admin_dashboard); teachers keep their own queries
+  // ONE database call for the whole dashboard: admin_dashboard() for the Admin, staff_dashboard() for teachers and office staff.
+  // Each is scoped to the person by the database; fee numbers come back only with fee access.
   const today = todayIst();
-  const admin: AdminDashboardData | null =
-    me.role === "admin"
-      ? ((await supabase.rpc("admin_dashboard", { p_year: year?.id ?? "00000000-0000-0000-0000-000000000000", p_today: today })).data as unknown as AdminDashboardData | null)
-      : null;
-  const stats = me.role === "teacher" ? await teacherStats() : me.role === "admin" ? schoolStats() : [];
+  const yearId = year?.id ?? "00000000-0000-0000-0000-000000000000";
+  const admin: AdminDashboardData | null = me.role === "admin" ? ((await supabase.rpc("admin_dashboard", { p_year: yearId, p_today: today })).data as unknown as AdminDashboardData | null) : null;
+  const staff: StaffDashboardData | null = me.role !== "admin" ? ((await supabase.rpc("staff_dashboard", { p_year: yearId, p_today: today })).data as unknown as StaffDashboardData | null) : null;
+  const stats = me.role === "teacher" ? teacherStats() : me.role === "admin" ? schoolStats() : [];
 
   // Teachers see their own numbers only (scope rule R18).
-  async function teacherStats(): Promise<Stat[]> {
-    const mine = year ? await getMyClasses(me, year.id) : [];
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: next } = year
-      ? await supabase.from("holidays").select("date, name").eq("academic_year_id", year.id).gte("date", today).order("date").limit(1).maybeSingle()
-      : { data: null };
+  function teacherStats(): Stat[] {
+    const c = staff?.counts ?? { sections: 0, subjects: 0, students: 0 };
+    const next = staff?.next_holiday ?? null;
     return [
-      { label: "My classes", value: mine.length, icon: School, accent: "navy", href: "/my/classes" },
-      { label: "My subjects", value: new Set(mine.flatMap((m) => m.subjects)).size, icon: BookOpen, accent: "green", href: "/my/classes" },
-      { label: "My students", value: mine.reduce((n, m) => n + (m.students ?? 0), 0), icon: GraduationCap, accent: "gold", href: "/my/students" },
+      { label: "My classes", value: c.sections, icon: School, accent: "navy", href: "/my/classes" },
+      { label: "My subjects", value: c.subjects, icon: BookOpen, accent: "green", href: "/my/classes" },
+      { label: "My students", value: c.students, icon: GraduationCap, accent: "gold", href: "/my/students" },
       { label: next ? `Next holiday · ${next.name}` : "Next holiday", value: next ? formatDate(next.date) : "—", icon: PartyPopper, accent: "cream", href: "/my/holidays" },
     ];
   }
@@ -122,23 +115,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </p>
       )}
 
-      {admin ? (
-        <AdminDashboardCards data={admin} today={today} deadline={settings?.diary_deadline ?? "15:30"} />
-      ) : (
-        <>
-          <Suspense fallback={<div className="skeleton mb-4 h-40 rounded-[var(--radius-card)]" aria-label="Loading notices" />}>
-            <NoticesDashboard me={me} />
-          </Suspense>
-          {me.role === "teacher" && (
-            <Suspense fallback={<div className="skeleton mb-4 h-24 rounded-[var(--radius-card)]" aria-label="Loading today" />}>
-              <TodayStrip />
-            </Suspense>
-          )}
-          <Suspense fallback={<div className="skeleton mb-4 h-32 rounded-[var(--radius-card)]" aria-label="Loading attendance" />}>
-            <AttendanceDashboard me={me} />
-          </Suspense>
-        </>
-      )}
+      {admin && <AdminDashboardCards data={admin} today={today} deadline={settings?.diary_deadline ?? "15:30"} />}
+      {staff && <StaffDashboardCards data={staff} today={today} deadline={settings?.diary_deadline ?? "15:30"} isTeacher={me.role === "teacher"} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map(({ label, value, icon: Icon, accent, href, hint }) => {

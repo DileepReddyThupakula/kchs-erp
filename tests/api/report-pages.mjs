@@ -26,19 +26,21 @@ export default async function run({ ok, skip }) {
   const get = async (path, ck) => {
     const r = await fetch(app + path, { headers: { cookie: ck }, redirect: "manual" });
     const loc = r.headers.get("location") ?? "";
-    const body = r.status === 200 ? await r.text() : "";
+    const body = await r.text();
     const redirected = (r.status >= 300 && r.status < 400 && /not-allowed|login/.test(loc)) || (r.status === 200 && /NEXT_REDIRECT/.test(body) && /not-allowed/.test(body));
     const leaked = /₹\s?\d|Outstanding|Overdue|Collected|Cancelled amount/.test(body.replace(/<title>[^<]*<\/title>/g, ""));
-    return { status: r.status, blocked: redirected && !leaked, opened: r.status === 200 && !redirected, body };
+    // fee pages must be refused BEFORE anything renders: a real HTTP redirect, and no fee page title anywhere in what was sent
+    const realRedirect = r.status >= 300 && r.status < 400 && /not-allowed|login/.test(loc) && !/Fee summary|Collect fee|Fee reports|Dues|Receipts|Fee setup|Concessions/i.test(body);
+    return { status: r.status, blocked: redirected && !leaked, realRedirect, opened: r.status === 200 && !redirected, body };
   };
   for (const [user, hasFee] of WHO) {
     const ck = await cookie(user);
     const bad = [];
     for (const p of FEE_PAGES) {
       const r = await get(p, ck);
-      if (hasFee ? !r.opened : !r.blocked) bad.push(`${p}:${r.status}`);
+      if (hasFee ? !r.opened : !r.realRedirect) bad.push(`${p}:${r.status}`);
     }
-    ok(bad.length === 0, `${user}: fee pages typed directly are ${hasFee ? "open" : "blocked"}`, bad.join(", "));
+    ok(bad.length === 0, `${user}: fee pages typed directly are ${hasFee ? "open" : "refused with a real redirect, no fee title sent"}`, bad.join(", "));
     // what the hub and the menu show
     const hub = (await get("/reports", ck)).body;
     ok(hasFee ? /Fee summary/.test(hub) : !/Fee summary|Collection by day|Dues and defaulters|Receipts/.test(hub), `${user}: the Reports hub ${hasFee ? "lists" : "does not list"} fee reports`);
@@ -48,7 +50,7 @@ export default async function run({ ok, skip }) {
   for (const user of ["fees", "teacher1", "desk"]) {
     const ck = await cookie(user);
     const bad = [];
-    for (const p of ADMIN_ONLY_FEE_PAGES) if (!(await get(p, ck)).blocked) bad.push(p);
+    for (const p of ADMIN_ONLY_FEE_PAGES) if (!(await get(p, ck)).realRedirect) bad.push(p);
     ok(bad.length === 0, `${user}: the Admin-only fee pages (setup, concessions) are blocked`, bad.join(", "));
   }
   // other reports follow the duty too

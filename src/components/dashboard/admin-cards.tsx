@@ -3,6 +3,7 @@ import { BookOpenCheck, CalendarCheck, CalendarOff, CheckCircle2, ChevronRight, 
 import { Card } from "@/components/ui/card";
 import { boardRows } from "@/features/notices/diary-workflow";
 import { SESSION_LABEL, type SessionName } from "@/features/attendance/shared";
+import { FeeTiles, type FeeBlock } from "./fee-tiles";
 
 /** What `public.admin_dashboard()` returns: everything the Admin dashboard shows, from ONE database call. */
 export type AdminDashboardData = {
@@ -11,7 +12,10 @@ export type AdminDashboardData = {
   pending_leave: number;
   notices: { id: string; title: string; circular_no: string | null; important: boolean; publish_date: string; read: boolean; read_count: number | null; total: number | null }[];
   translation: { used: number; cap: number } | null;
-  exam: { groups: number; holidays: number };
+  exam: { groups: number; holidays: number; unlocked?: number };
+  attendance_today?: { students_marked: number; students_present: number };
+  /** null unless the person has fee access */
+  fees?: FeeBlock;
   diary: { section_id: string; label: string; class_order: number; expected: number; submitted: number; published: number; pending: number; skipped: number }[];
 };
 
@@ -35,8 +39,10 @@ export function AdminDashboardCards({ data, today, deadline }: { data: AdminDash
   const cap = Number(data.translation?.cap ?? 0);
   const pct = cap > 0 ? Math.round((used / cap) * 100) : used > 0 ? 100 : 0;
 
+  const att = data.attendance_today;
   return (
     <>
+      <FeeTiles fees={data.fees ?? null} />
       {important.length > 0 && (
         <section aria-label="Important notices" className="mb-4 space-y-2">
           {important.map((n) => (
@@ -182,6 +188,12 @@ export function AdminDashboardCards({ data, today, deadline }: { data: AdminDash
           </div>
         </Card>
         <Card>
+          {att && att.students_marked > 0 && (
+            <p className="mb-3 text-sm text-navy-900">
+              Students present today: <b className="tabular-nums">{Math.round((att.students_present / att.students_marked) * 100)}%</b>{" "}
+              <span className="text-muted">({att.students_present} of {att.students_marked} marked)</span>
+            </p>
+          )}
           <h2 className="mb-1 flex items-center gap-2 font-semibold text-navy-900">
             <CalendarOff className="size-4 text-navy-500" aria-hidden /> Leave waiting for approval
           </h2>

@@ -3,6 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { tracedFetch } from "./trace";
 
 const PUBLIC_PATHS = ["/login"];
+/** Fee pages: Admin and office staff with fee access only. Checked here, before anything renders, so a refused person gets a real
+ *  redirect and not even the page title is sent. (The pages, and the database, check again.) */
+const FEE_PATHS = ["/fees", "/reports/fees", "/print/receipt", "/print/report/fee-"];
+const ADMIN_ONLY_FEE_PATHS = ["/fees/setup", "/fees/concessions"];
+const startsWithAny = (path: string, list: string[]) => list.some((p) => path === p || path.startsWith(p.endsWith("-") ? p : `${p}/`) || path.startsWith(`${p}?`));
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -34,6 +39,18 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/login";
     url.search = "";
     return NextResponse.redirect(url);
+  }
+
+  const path = request.nextUrl.pathname;
+  if (user && startsWithAny(path, FEE_PATHS)) {
+    const adminOnly = startsWithAny(path, ADMIN_ONLY_FEE_PATHS);
+    const { data: allowed } = adminOnly ? await supabase.rpc("my_role").then((r) => ({ data: r.data === "admin" })) : await supabase.rpc("has_duty", { p_duty: "fee_collection" });
+    if (allowed !== true) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/not-allowed";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
   }
   return response;
 }

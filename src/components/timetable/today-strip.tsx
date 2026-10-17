@@ -1,16 +1,12 @@
 import Link from "next/link";
 import { ArrowRight, CalendarClock } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
-import { fmtRange, mondayOf } from "@/features/timetable/shared";
-import { todayIst } from "@/features/fees/shared";
+import { fmtRange } from "@/features/timetable/shared";
 
-/** "Today" strip on a teacher's dashboard: their own periods today, next one marked. */
-export async function TodayStrip() {
-  const supabase = await createClient();
-  const today = todayIst();
-  const { data } = await supabase.rpc("my_week", { p_week_start: mondayOf(today) });
-  const rows = (data ?? []).filter((r) => r.on_date === today);
+export type TodayPeriod = { period_no: number; kind: string; section_id: string | null; section_label: string | null; subject_name: string | null; activity: string | null; start_time: string | null; end_time: string | null };
+
+/** "Today" strip on a teacher's dashboard: their own periods today, next one marked. The rows come with the dashboard's one call. */
+export function TodayStrip({ rows }: { rows: TodayPeriod[] }) {
   const nowIst = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
   const nextIdx = rows.findIndex((r) => r.kind !== "substituted_out" && r.end_time && r.end_time.slice(0, 5) > nowIst);
   return (

@@ -101,3 +101,9 @@ async function run(label, email, pages) {
 }
 if (who === "admin" || who === "both") await run("Admin", "admin@demo.kchs.test", PAGES.admin);
 if (who === "teacher" || who === "both") await run("Teacher", "teacher1@demo.kchs.test", PAGES.teacher);
+// dashboards of every kind of person:  node --env-file=.env.local scripts/perf-measure.mjs <base> dashboards
+if (who === "dashboards") {
+  for (const [label, email] of [["Admin", "admin@demo.kchs.test"], ["Teacher", "teacher1@demo.kchs.test"], ["Office (fees)", "fees@demo.kchs.test"], ["Office (desk)", "desk@demo.kchs.test"]]) {
+    await run(label, email, [["Dashboard", "/dashboard"]]);
+  }
+}

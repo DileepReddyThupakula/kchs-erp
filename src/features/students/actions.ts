@@ -327,7 +327,7 @@ export async function commitImport(rows: RawRow[]): Promise<{ results?: { rowNo:
 }
 
 // ------------------------------------------------------------------ government export (Admin)
-export async function governmentExportRows(input: { studentIds: string[]; includeFullIds: boolean }): Promise<{ headers?: string[]; rows?: (string | number | boolean | null)[][]; error?: string }> {
+export async function governmentExportRows(input: { studentIds: string[]; includeFullIds: boolean; filters?: { class?: string; section?: string; status?: string } }): Promise<{ headers?: string[]; rows?: (string | number | boolean | null)[][]; error?: string }> {
   await requireCapability("students.govExport");
   const ids = z.array(uuid).max(5000).parse(input.studentIds);
   if (!ids.length) return { error: "No students to export." };
@@ -364,10 +364,13 @@ export async function governmentExportRows(input: { studentIds: string[]; includ
       return Array.isArray(v) ? v.join("; ") : typeof v === "boolean" ? (v ? "Yes" : "No") : ((v as string | number | null | undefined) ?? null);
     }),
   ]);
-  await supabase.rpc("log_event", {
-    p_action: "export",
-    p_table: "students.government",
-    p_details: { rows: rows.length, fullIds: input.includeFullIds },
+  // the same audit entry as every other report export: who, when, which filters, how many rows. Never an ID number.
+  const f = input.filters ?? {};
+  await supabase.rpc("log_report", {
+    p_report: "government-export",
+    p_format: "xlsx",
+    p_filters: { class: String(f.class ?? "All classes").slice(0, 60), section: String(f.section ?? "All sections").slice(0, 60), status: String(f.status ?? "All").slice(0, 20), full_ids: input.includeFullIds },
+    p_rows: rows.length,
   });
   return { headers, rows };
 }
