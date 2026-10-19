@@ -30,6 +30,7 @@ export const AUDIT_KINDS: { value: string; label: string }[] = [
   { value: "attendance", label: "Attendance" },
   { value: "staff", label: "Staff and duties" },
   { value: "exports", label: "Exports and prints" },
+  { value: "certificates", label: "Certificates" },
   { value: "access", label: "Sign-in and access" },
   { value: "other", label: "Everything else" },
 ];
@@ -105,7 +106,7 @@ export function changesText(changes: AuditChange[]): string {
 }
 
 // ------------------------------------------------------------------ dashboard alerts
-export const ALERT_KEYS = ["ids_revealed", "receipts_cancelled", "exams_unlocked", "marks_after_unlock", "failed_logins", "duties_changed", "roles_changed", "staff_deactivated"] as const;
+export const ALERT_KEYS = ["ids_revealed", "receipts_cancelled", "exams_unlocked", "marks_after_unlock", "failed_logins", "duties_changed", "roles_changed", "staff_deactivated", "certificates_look"] as const;
 export type AlertKey = (typeof ALERT_KEYS)[number];
 export type AuditAlert = { key: AlertKey; label: string; severity: string; count: number; latest_at: string | null; rows: { at: string; who: string; text: string }[] };
 export type AuditAlerts = { days: number; items: AuditAlert[] };
@@ -120,6 +121,7 @@ export const ALERT_COPY: Record<AlertKey, { title: string; help: string }> = {
   duties_changed: { title: "Duties or fee access changed", help: "Who was given or lost a duty." },
   roles_changed: { title: "Staff roles changed", help: "Someone's role was changed." },
   staff_deactivated: { title: "Staff deactivated", help: "These people can no longer sign in." },
+  certificates_look: { title: "Certificates worth a look", help: "Duplicate copies, TC \"issue anyway\" approvals and cancelled certificates." },
 };
 
 /** Where each alert opens: the audit log showing ONLY the entries that triggered it, for the same 7 days the card counts. */

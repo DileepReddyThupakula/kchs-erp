@@ -27,7 +27,7 @@ export default async function run({ ok, skip }) {
   const wide = await A.rpc("audit_entries", { p_from: "2020-01-01", p_limit: 500 });
   ok(!wide.error && !/\b[2-9][0-9]{11}\b/.test(JSON.stringify(wide.data).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "")), "Admin: no 12-digit ID number anywhere in the output", wide.error?.message);
   const al = await A.rpc("audit_alerts", { p_days: 7 });
-  ok(!al.error && al.data.items.length === 8 && al.data.items.every((i) => typeof i.count === "number"), "Admin: the 8 alert kinds are returned", al.error?.message);
+  ok(!al.error && al.data.items.length === 9 && al.data.items.every((i) => typeof i.count === "number"), "Admin: the 9 alert kinds are returned", al.error?.message);
   ok(!(await A.rpc("audit_actors")).error, "Admin: the person list works");
   const before = (await svc.from("audit_logs").select("id", { count: "exact", head: true }).eq("action", "report.export").contains("details", { report: "audit-log" })).count ?? 0;
   const ex = await A.rpc("audit_export", { p_format: "csv", p_group: "fees" });

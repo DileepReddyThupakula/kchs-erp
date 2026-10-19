@@ -16,16 +16,16 @@ import { canOpenPage, findPage } from "@/lib/site-map";
 
 afterEach(cleanup);
 
-const KEYS: AlertKey[] = ["ids_revealed", "receipts_cancelled", "exams_unlocked", "marks_after_unlock", "failed_logins", "duties_changed", "roles_changed", "staff_deactivated"];
+const KEYS: AlertKey[] = ["ids_revealed", "receipts_cancelled", "exams_unlocked", "marks_after_unlock", "failed_logins", "duties_changed", "roles_changed", "staff_deactivated", "certificates_look"];
 const alerts = (over: Partial<Record<AlertKey, number>> = {}): AuditAlerts => ({
   days: 7,
   items: KEYS.map((key) => ({ key, label: key, severity: "high", count: over[key] ?? 0, latest_at: null, rows: over[key] ? [{ at: "2026-10-19T05:00:00Z", who: "Au Admin", text: key === "failed_logins" ? "Failed sign-in for victim@school.test" : "Something happened" }] : [] })),
 });
 
 describe("alert cards", () => {
-  it("shows all 8 cards and a calm line when nothing happened", () => {
+  it("shows all 9 cards and a calm line when nothing happened", () => {
     render(<AuditAlertCards alerts={alerts()} today="2026-10-19" />);
-    expect(screen.getAllByRole("listitem").filter((li) => li.querySelector("h3")).length).toBe(8);
+    expect(screen.getAllByRole("listitem").filter((li) => li.querySelector("h3")).length).toBe(9);
     expect(screen.getByText(/Nothing unusual was recorded/)).toBeTruthy();
   });
 

@@ -190,7 +190,7 @@ select pg_temp.affects($$update public.students set address = 'x' where id = '51
 select pg_temp.login_as('00000000-0000-4000-d000-000000000007');
 select pg_temp.counts($$select count(*) from public.students where admission_no like 'STU-%'$$, 0, 'teacher without sections: no students');
 select pg_temp.counts($$select count(*) from public.guardians where full_name like 'Stu %'$$, 0, 'teacher without sections: no guardians');
-select pg_temp.counts($$select count(*) from public.student_field_definitions$$, 49, 'teachers can read field labels (no data)');
+select pg_temp.counts($$select count(*) from public.student_field_definitions$$, 52, 'teachers can read field labels (no data; 49 government fields + 3 optional Telugu name fields)');
 
 select pg_temp.login_as(null);
 select pg_temp.throws('select count(*) from public.students', 'anon: no access to students', '42501');
