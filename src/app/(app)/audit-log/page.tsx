@@ -8,7 +8,7 @@ import { buttonClasses } from "@/components/ui/button-classes";
 import { AuditEntryList } from "@/components/audit/entry-list";
 import { AuditExportButtons } from "@/components/audit/export-buttons";
 import { getAuditActors, getAuditPage } from "@/features/audit/queries";
-import { AUDIT_EXPORT_MAX, AUDIT_KINDS, AUDIT_PAGE_SIZE, auditHref, parseAuditFilters } from "@/features/audit/shared";
+import { ALERT_COPY, type AlertKey, AUDIT_EXPORT_MAX, AUDIT_KINDS, AUDIT_PAGE_SIZE, auditHref, parseAuditFilters } from "@/features/audit/shared";
 
 export const metadata = { title: "Audit log" };
 
@@ -21,7 +21,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
   const supabase = await createClient();
   const [page, actors] = await Promise.all([getAuditPage(supabase, f), getAuditActors(supabase)]);
 
-  const params: Record<string, string> = { from: f.from, to: f.to, actor: f.actor, kind: f.kind, q: f.q, table: f.table, record: f.record };
+  const params: Record<string, string> = { from: f.from, to: f.to, actor: f.actor, kind: f.kind, q: f.q, table: f.table, record: f.record, alert: f.alert };
   const pages = Math.max(1, Math.ceil(page.total / AUDIT_PAGE_SIZE));
   const link = (n: number) => auditHref({ ...params, page: n > 1 ? String(n) : "" });
   const tooMany = page.total > AUDIT_EXPORT_MAX;
@@ -57,7 +57,14 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
         </div>
         {f.table && <input type="hidden" name="table" value={f.table} />}
         {f.record && <input type="hidden" name="record" value={f.record} />}
+        {f.alert && <input type="hidden" name="alert" value={f.alert} />}
       </form>
+      {f.alert && (
+        <p className="mb-3 text-sm text-muted">
+          Showing only the entries behind “{ALERT_COPY[f.alert as AlertKey].title}”.{" "}
+          <Link href={auditHref({ from: f.from, to: f.to })} className="font-medium text-navy-700 underline">Show all</Link>
+        </p>
+      )}
       {(f.table || f.record) && (
         <p className="mb-3 text-sm text-muted">
           Showing {f.table ? `only “${f.table.replace(/_/g, " ")}” entries` : ""}{f.record ? " for one record" : ""}.{" "}

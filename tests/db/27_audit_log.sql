@@ -162,3 +162,22 @@ select pg_temp.throws($$select count(*) from public.audit_logs$$, 'not signed in
 select pg_temp.lives($$select public.log_failed_login('anon-ok@school.test')$$, 'not signed in: may report a failed sign-in (that is the only thing allowed)');
 select pg_temp.throws($$select public.log_event('x')$$, 'not signed in: cannot write other log events', '42501');
 select pg_temp.logout();
+
+-- ================= each alert opens exactly the entries that triggered it
+select pg_temp.login_as('00000000-0000-4000-fb00-000000000001');
+create function pg_temp.alert_total(p_key text) returns int language sql as $$
+  select coalesce((select (i ->> 'count')::int from jsonb_array_elements(public.audit_alerts(7) -> 'items') i where i ->> 'key' = p_key), 0)
+$$;
+grant execute on function pg_temp.alert_total(text) to authenticated;
+create function pg_temp.alert_listed(p_key text) returns int language sql as $$
+  select (public.audit_entries((date_trunc('day', now() at time zone 'Asia/Kolkata') - interval '6 days') at time zone 'Asia/Kolkata', null, null, null, null, null, null, 1, 0, p_key) ->> 'total')::int
+$$;
+grant execute on function pg_temp.alert_listed(text) to authenticated;
+select pg_temp.ok(pg_temp.alert_total(k) = pg_temp.alert_listed(k), 'alert link "' || k || '": the page lists exactly as many entries as the card counts', pg_temp.alert_total(k) || ' vs ' || pg_temp.alert_listed(k))
+  from unnest(array['ids_revealed','receipts_cancelled','exams_unlocked','marks_after_unlock','failed_logins','duties_changed','roles_changed','staff_deactivated']) k;
+select pg_temp.ok((select min(pg_temp.alert_total(k)) from unnest(array['receipts_cancelled','exams_unlocked','marks_after_unlock','roles_changed','staff_deactivated','failed_logins','ids_revealed']) k) >= 1, 'every alert kind has at least one entry in this test, so the comparison above is not empty');
+select pg_temp.ok(not exists (select 1 from jsonb_array_elements(public.audit_entries(now() - interval '1 hour', null, null, null, null, null, null, 500, 0, 'receipts_cancelled') -> 'rows') r where r ->> 'summary' not like 'Cancelled receipt%'), 'receipts link: only cancellations, no other receipt change');
+select pg_temp.ok(not exists (select 1 from jsonb_array_elements(public.audit_entries(now() - interval '1 hour', null, null, null, null, null, null, 500, 0, 'exams_unlocked') -> 'rows') r where r ->> 'summary' not like 'Unlocked%'), 'exams link: only unlocks');
+select pg_temp.ok((public.audit_entries(now() - interval '1 hour', null, null, null, null, null, null, 500, 0, 'marks_after_unlock') ->> 'total')::int = 1, 'marks link: only the mark changed after the unlock (the other exam''s change is not listed)');
+select pg_temp.ok((public.audit_entries(now() - interval '1 hour', null, null, null, null, null, null, 500, 0, 'nonsense') ->> 'total')::int = 0, 'an unknown alert name lists nothing');
+select pg_temp.logout();

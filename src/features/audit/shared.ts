@@ -35,7 +35,7 @@ export const AUDIT_KINDS: { value: string; label: string }[] = [
 ];
 export const KIND_LABEL: Record<string, string> = Object.fromEntries(AUDIT_KINDS.map((k) => [k.value, k.label]));
 
-export type AuditFilters = { from: string; to: string; actor: string; kind: string; q: string; table: string; record: string; page: number };
+export type AuditFilters = { from: string; to: string; actor: string; kind: string; q: string; table: string; record: string; alert: string; page: number };
 
 function addDays(date: string, n: number) {
   const d = new Date(`${date}T00:00:00Z`);
@@ -60,6 +60,7 @@ export function parseAuditFilters(sp: Record<string, string | string[] | undefin
     q: one("q").trim().slice(0, 60),
     table,
     record: one("record").trim().slice(0, 80),
+    alert: (ALERT_KEYS as readonly string[]).includes(one("alert")) ? one("alert") : "",
     page: Math.max(1, Math.min(10000, parseInt(one("page") || "1", 10) || 1)),
   };
 }
@@ -74,10 +75,11 @@ export function auditRpcArgs(f: AuditFilters) {
     p_table: f.table || undefined,
     p_record: f.record || undefined,
     p_search: f.q || undefined,
+    p_alert: f.alert || undefined,
   };
 }
 
-export function auditHref(p: Partial<Record<"from" | "to" | "actor" | "kind" | "q" | "table" | "record" | "page", string>>) {
+export function auditHref(p: Partial<Record<"from" | "to" | "actor" | "kind" | "q" | "table" | "record" | "alert" | "page", string>>) {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(p)) if (v) u.set(k, v);
   const s = u.toString();
@@ -103,7 +105,8 @@ export function changesText(changes: AuditChange[]): string {
 }
 
 // ------------------------------------------------------------------ dashboard alerts
-export type AlertKey = "ids_revealed" | "receipts_cancelled" | "exams_unlocked" | "marks_after_unlock" | "failed_logins" | "duties_changed" | "roles_changed" | "staff_deactivated";
+export const ALERT_KEYS = ["ids_revealed", "receipts_cancelled", "exams_unlocked", "marks_after_unlock", "failed_logins", "duties_changed", "roles_changed", "staff_deactivated"] as const;
+export type AlertKey = (typeof ALERT_KEYS)[number];
 export type AuditAlert = { key: AlertKey; label: string; severity: string; count: number; latest_at: string | null; rows: { at: string; who: string; text: string }[] };
 export type AuditAlerts = { days: number; items: AuditAlert[] };
 
@@ -119,20 +122,9 @@ export const ALERT_COPY: Record<AlertKey, { title: string; help: string }> = {
   staff_deactivated: { title: "Staff deactivated", help: "These people can no longer sign in." },
 };
 
-/** Where each alert opens in the audit log (the same entries, filtered). */
+/** Where each alert opens: the audit log showing ONLY the entries that triggered it, for the same 7 days the card counts. */
 export function alertHref(key: AlertKey, today: string): string {
-  const from = addDays(today, -6);
-  const base = { from, to: today };
-  switch (key) {
-    case "ids_revealed": return auditHref({ ...base, kind: "access", q: "ids_revealed" });
-    case "receipts_cancelled": return auditHref({ ...base, kind: "fees", table: "fee_receipts" });
-    case "exams_unlocked": return auditHref({ ...base, kind: "marks", table: "exam_components" });
-    case "marks_after_unlock": return auditHref({ ...base, kind: "marks", table: "marks" });
-    case "failed_logins": return auditHref({ ...base, kind: "access", q: "login_failed" });
-    case "duties_changed": return auditHref({ ...base, kind: "staff", table: "staff_permissions" });
-    case "roles_changed":
-    case "staff_deactivated": return auditHref({ ...base, kind: "staff", table: "staff" });
-  }
+  return auditHref({ from: addDays(today, -6), to: today, alert: key });
 }
 
 export function alertRowText(key: AlertKey, text: string): string {

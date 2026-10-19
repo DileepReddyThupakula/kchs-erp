@@ -38,17 +38,19 @@ describe("alert cards", () => {
     for (const c of Object.values(ALERT_COPY)) expect(c.title + c.help).not.toMatch(/attack|hack|breach|intru/i);
   });
 
-  it("every card links to the audit log, filtered, for the last 7 days", () => {
-    render(<AuditAlertCards alerts={alerts({ receipts_cancelled: 2, failed_logins: 5 })} today="2026-10-19" />);
-    for (const key of KEYS) {
-      const href = alertHref(key, "2026-10-19");
-      expect(href).toMatch(/^\/audit-log\?/);
-      expect(href).toContain("from=2026-10-13");
-      expect(href).toContain("to=2026-10-19");
-      expect(document.querySelector(`a[href="${href}"]`)).toBeTruthy();
-    }
-    expect(alertHref("receipts_cancelled", "2026-10-19")).toContain("table=fee_receipts");
-    expect(alertHref("failed_logins", "2026-10-19")).toContain("q=login_failed");
+  it.each(KEYS)("the %s card opens only the entries that triggered it, for the same 7 days", (key) => {
+    render(<AuditAlertCards alerts={alerts({ [key]: 2 })} today="2026-10-19" />);
+    const href = alertHref(key, "2026-10-19");
+    expect(href).toBe(`/audit-log?from=2026-10-13&to=2026-10-19&alert=${key}`);
+    expect(document.querySelector(`a[href="${href}"]`)).toBeTruthy();
+    // and the page reads that address back as the same filter, sent to the database as p_alert
+    const f = parseAuditFilters(Object.fromEntries(new URL(href, "http://x").searchParams), "2026-10-19");
+    expect(f).toMatchObject({ alert: key, from: "2026-10-13", to: "2026-10-19", kind: "", table: "", q: "" });
+    expect(auditRpcArgs(f).p_alert).toBe(key);
+  });
+
+  it("an unknown alert name in the address is ignored", () => {
+    expect(parseAuditFilters({ alert: "x; drop table" }, "2026-10-19").alert).toBe("");
   });
 
   it("appears on the Admin dashboard only when the database sent alerts", () => {
