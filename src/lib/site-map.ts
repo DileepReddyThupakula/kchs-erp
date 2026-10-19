@@ -79,6 +79,8 @@ export type PageDef = {
   description: string;
   /** Teacher wording, following the scope rule (own classes only). */
   teacherDescription?: string;
+  /** The duty opens this page for OFFICE staff only: a teacher holding the duty still does not (certificates). */
+  officeOnly?: boolean;
 };
 
 export const PAGES: PageDef[] = [
@@ -98,7 +100,7 @@ export const PAGES: PageDef[] = [
   { path: "/students", name: "Students", icon: GraduationCap, module: "students", status: "built", access: { admin: true, duty: "student_records" }, menu: { admin: "Students", teacher: "Students" }, description: "Search, filter, add, edit, import and export students; profiles with guardians, siblings, documents and enrolment history." },
   { path: "/students/import", name: "Import students", icon: FileSpreadsheet, module: "students", status: "built", access: { admin: true, duty: "student_records" }, menu: { teacher: "Students" }, description: "Excel template with allowed values, row-by-row validation preview, error report and safe re-import without duplicates." },
   { path: "/students/promotion", name: "Promotion", icon: ArrowUpCircle, module: "students", status: "built", access: { admin: true }, menu: { admin: "Students" }, description: "Move students to the next class at year end (promote, detain, mark left / TC issued)." },
-  { path: "/students/certificates", name: "Certificates", icon: FileBadge, module: "students", status: "planned", access: { admin: true, duty: "certificates_idcards" }, menu: { admin: "Students", teacher: "Students" }, description: "Transfer, bonafide and study certificates with numbering and print layout." },
+  { path: "/students/certificates", name: "Certificates", icon: FileBadge, module: "students", status: "built", officeOnly: true, access: { admin: true, duty: "certificates_idcards" }, menu: { admin: "Students", teacher: "Students" }, description: "Transfer, bonafide and study certificates with numbering and print layout." },
   { path: "/students/id-cards", name: "ID cards", icon: IdCard, module: "students", status: "planned", access: { admin: true, duty: "certificates_idcards" }, menu: { admin: "Students", teacher: "Students" }, description: "Print student ID cards by class or selection." },
 
   // ---------------------------------------------------------------- academics
@@ -164,6 +166,7 @@ export function canOpenPage(page: PageDef, who: Who): boolean {
   if (who.role === "admin") return !!a.admin;
   // teachers and office staff: pages open to every staff member, plus the pages of the duties they hold
   // (fee pages: office staff with fee access only, never a teacher)
+  if (a.duty && page.officeOnly && who.role === "teacher") return !!a.teacher;
   return !!a.teacher || (!!a.duty && holdsDuty(who, a.duty));
 }
 

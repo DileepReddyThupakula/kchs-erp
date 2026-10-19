@@ -32,6 +32,10 @@ export type AuditLog = {
   details: Json | null;
   kind: string;
 };
+export type CertificateTemplate = Stamps & { kind: string; title_en: string; title_te: string; texts: Json; layout_draft: boolean; wording_confirmed: boolean };
+export type CertificateSettings = Stamps & { id: number; prefix_tc: string; prefix_bonafide: string; prefix_study: string; show_signature_image: boolean };
+export type CertificateSeries = Stamps & { kind: string; academic_year_id: string; start_no: number; next_no: number };
+export type CertificateRow = Stamps & { id: string; kind: string; academic_year_id: string; seq: number; number: string; student_id: string; status: string; language: string };
 export type ClassSubject = Stamps & {
   id: string;
   academic_year_id: string;
@@ -533,6 +537,10 @@ export type Database = {
     Tables: {
       academic_years: T<AcademicYear, "name" | "start_date" | "end_date">;
       audit_logs: T<AuditLog, "action">;
+      certificate_templates: T<CertificateTemplate, "kind">;
+      certificate_settings: T<CertificateSettings, "id">;
+      certificate_series: T<CertificateSeries, "kind" | "academic_year_id">;
+      certificates: T<CertificateRow, "kind" | "number">;
       class_subjects: T<
         ClassSubject,
         "academic_year_id" | "class_id" | "subject_id",
@@ -768,6 +776,8 @@ export type Database = {
       certificate_template_save: { Args: { p_kind: string; p_key: string; p_en: string; p_te: string }; Returns: undefined };
       certificate_template_confirm_telugu: { Args: { p_kind: string; p_key?: string }; Returns: undefined };
       certificate_template_set_draft: { Args: { p_kind: string; p_layout_draft: boolean; p_wording_confirmed?: boolean }; Returns: undefined };
+      certificate_print_state: { Args: { p_certificate: string }; Returns: Json };
+      certificate_student_search: { Args: { p_q: string; p_kind?: string }; Returns: Json };
       certificate_school_check: { Args: Record<string, never>; Returns: Json };
       audit_alerts: { Args: { p_days?: number }; Returns: Json };
       log_failed_login: { Args: { p_email: string }; Returns: undefined };

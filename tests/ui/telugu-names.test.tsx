@@ -47,7 +47,7 @@ describe("import checks keep working and take the Telugu names", () => {
     const v = validateImportRow({ ...base, name_te: "  రవి కుమార్ ", father_name_te: "రమేష్ కుమార్", mother_name_te: "" }, 2, ctx);
     expect(v.errors).toEqual([]);
     expect(v.payload!.details).toMatchObject({ name_te: "రవి కుమార్", father_name_te: "రమేష్ కుమార్" });
-    expect("mother_name_te" in v.payload!.details).toBe(false);          // a blank cell stays blank: nothing is guessed
+    expect("mother_name_te" in (v.payload?.details ?? {})).toBe(false);          // a blank cell stays blank: nothing is guessed
   });
   it("an Excel file without the Telugu columns still imports (they are optional)", () => {
     const v = validateImportRow(base, 2, ctx);
