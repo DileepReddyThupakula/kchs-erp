@@ -25,6 +25,8 @@ const RPCS = [
   ["audit_entries", {}],
   ["audit_alerts", { p_days: 7 }],
   ["audit_actors", {}],
+  ["rollover_preview", { p_from: "00000000-0000-4000-8000-000000000000", p_to: "00000000-0000-4000-8000-000000000001" }],
+  ["rollover_runs_list", {}],
   ["save_exam_component", { p: { name: "x" } }],
   ["lock_exam_component", { p_component: "00000000-0000-4000-8000-000000000000" }],
   ["save_marks", { p_component: "00000000-0000-4000-8000-000000000000", p_section: "00000000-0000-4000-8000-000000000000", p_subject: "00000000-0000-4000-8000-000000000000", p_rows: [] }],

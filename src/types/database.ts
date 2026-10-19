@@ -746,6 +746,12 @@ export type Database = {
       audit_record_history: { Args: { p_table: string; p_record: string; p_limit?: number }; Returns: Json };
       audit_actors: { Args: Record<string, never>; Returns: Json };
       audit_export: { Args: { p_format: string; p_from?: string; p_to?: string; p_actor?: string; p_group?: string; p_table?: string; p_record?: string; p_search?: string; p_alert?: string }; Returns: Json };
+      rollover_preview: { Args: { p_from: string; p_to: string; p_plan?: Json }; Returns: Json };
+      rollover_confirm: { Args: { p_from: string; p_to: string; p_plan: Json; p_checked: boolean; p_typed_name: string }; Returns: Json };
+      rollover_undo_check: { Args: { p_run: string }; Returns: Json };
+      rollover_undo: { Args: { p_run: string }; Returns: Json };
+      rollover_runs_list: { Args: Record<string, never>; Returns: Json };
+      previous_year_balance: { Args: { p_student: string; p_year?: string }; Returns: Json };
       audit_alerts: { Args: { p_days?: number }; Returns: Json };
       log_failed_login: { Args: { p_email: string }; Returns: undefined };
       admin_dashboard: { Args: { p_year: string; p_today: string }; Returns: Json };
