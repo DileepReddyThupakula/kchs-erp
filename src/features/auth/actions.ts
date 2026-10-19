@@ -15,7 +15,11 @@ export async function signIn(_: ActionState, formData: FormData): Promise<Action
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error) return { error: "Incorrect email or password." };
+  if (error) {
+    // recorded so the Admin dashboard can warn about repeated failures on one account (best effort; never blocks the sign-in screen)
+    try { await supabase.rpc("log_failed_login", { p_email: parsed.data.email }); } catch { /* ignore */ }
+    return { error: "Incorrect email or password." };
+  }
 
   const { data: role } = await supabase.rpc("my_role");
   if (!role) {

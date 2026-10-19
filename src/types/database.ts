@@ -30,6 +30,7 @@ export type AuditLog = {
   old_data: Json | null;
   new_data: Json | null;
   details: Json | null;
+  kind: string;
 };
 export type ClassSubject = Stamps & {
   id: string;
@@ -741,6 +742,12 @@ export type Database = {
       collect_page: { Args: { p_year: string; p_today: string }; Returns: Json };
       marks_page: { Args: { p_year: string; p_section?: string; p_component?: string; p_subject?: string }; Returns: Json };
       results_page: { Args: { p_year: string; p_section?: string; p_group?: string }; Returns: Json };
+      audit_entries: { Args: { p_from?: string; p_to?: string; p_actor?: string; p_group?: string; p_table?: string; p_record?: string; p_search?: string; p_limit?: number; p_offset?: number }; Returns: Json };
+      audit_record_history: { Args: { p_table: string; p_record: string; p_limit?: number }; Returns: Json };
+      audit_actors: { Args: Record<string, never>; Returns: Json };
+      audit_export: { Args: { p_format: string; p_from?: string; p_to?: string; p_actor?: string; p_group?: string; p_table?: string; p_record?: string; p_search?: string }; Returns: Json };
+      audit_alerts: { Args: { p_days?: number }; Returns: Json };
+      log_failed_login: { Args: { p_email: string }; Returns: undefined };
       admin_dashboard: { Args: { p_year: string; p_today: string }; Returns: Json };
       notice_read_counts: { Args: never; Returns: { notice_id: string; read_count: number; total: number }[] };
       subject_result_calc: { Args: { p_student: string; p_group: string; p_subject: string }; Returns: Json };
