@@ -411,4 +411,5 @@ Answers given: custom editable scheme; Nursery to UKG grades and remarks; co-sch
 
 ## PM — Promotion / year rollover: next module after Module 9
 - **PM1 Order decided 2026-10-29:** after the audit log screens (Module 9) comes **Promotion / year rollover** (Students → Promotion): moving students to the next class and section for the new academic year, carrying class teachers and fee plans over, closing the old year. Its questions are asked one at a time when the owner says so; nothing is built or decided yet. It must be ready before April 2027.
+- **PM3 Year switch (decided 2026-10-30):** the Admin creates the new academic year in advance and switches by hand with one "Start new year" action. Nothing changes by itself on a date. The old year stays readable.
 - **PM2 Then:** Certificates (TC, bonafide, study) and ID cards, as already planned (R17).
