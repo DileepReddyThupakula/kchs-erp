@@ -32,6 +32,9 @@ insert into public.subjects (id, name, code) values ('5c100000-0000-4000-fc00-00
 insert into public.class_subjects (academic_year_id, class_id, subject_id, sort_order)
   select y, c, '5c100000-0000-4000-fc00-000000000001', 1 from unnest(array['2c000000-0000-4000-fc00-000000000001', '2c000000-0000-4000-fc00-000000000002']::uuid[]) y,
        unnest(array['3c100000-0000-4000-fc00-000000000001', '3c100000-0000-4000-fc00-000000000002', '3c100000-0000-4000-fc00-000000000003']::uuid[]) c;
+insert into public.teacher_assignments (staff_id, section_id, subject_id, periods_per_week) values
+  ('1a000000-0000-4000-fc00-000000000002', '3d100000-0000-4000-fc00-000000000001', '5c100000-0000-4000-fc00-000000000001', 6),
+  ('1a000000-0000-4000-fc00-000000000002', '3d100000-0000-4000-fc00-000000000003', '5c100000-0000-4000-fc00-000000000001', 5);
 -- fees: the same plan names in both years; "RO Odd" only in the old year
 insert into public.fee_heads (id, name, code, sort_order) values ('62c00000-0000-4000-fc00-000000000001', 'RO Tuition', 'RO-TUI', 94);
 insert into public.fee_plans (id, academic_year_id, name, kind, due_day) values
@@ -104,6 +107,7 @@ create function pg_temp.fp_old() returns text language sql as $$
     union all select concat_ws(',', 'res', r.id, r.student_id, r.result, r.scored) from public.student_results r where r.academic_year_id = '2c000000-0000-4000-fc00-000000000001'
     union all select concat_ws(',', 'grp', g.id, g.name, g.locked_at is null) from public.result_groups g where g.academic_year_id = '2c000000-0000-4000-fc00-000000000001'
     union all select concat_ws(',', 'plan', p.id, p.student_id, p.plan_id) from public.student_fee_plans p where p.academic_year_id = '2c000000-0000-4000-fc00-000000000001'
+    union all select concat_ws(',', 'asg', ta.id, ta.staff_id, ta.section_id, ta.subject_id, ta.periods_per_week) from public.teacher_assignments ta join public.sections s on s.id = ta.section_id where s.academic_year_id = '2c000000-0000-4000-fc00-000000000001'
     union all select concat_ws(',', 'conc', c.id, c.student_id, c.percent_bp) from public.fee_concessions c where c.academic_year_id = '2c000000-0000-4000-fc00-000000000001'
   ) x), ''))
 $$;
@@ -114,6 +118,7 @@ create function pg_temp.fp_touched() returns text language sql as $$
     union all select concat_ws(',', 'sec', s.id, s.class_id, s.name, s.medium, s.class_teacher_id, s.capacity) from public.sections s where s.academic_year_id = '2c000000-0000-4000-fc00-000000000002'
     union all select concat_ws(',', 'due', d.id, d.student_id, d.fee_head_id, d.plan_id, d.installment_seq, d.amount_paise, d.concession_paise, d.paid_paise, (d.voided_at is null)) from public.student_fee_dues d where d.academic_year_id = '2c000000-0000-4000-fc00-000000000002'
     union all select concat_ws(',', 'plan', p.id, p.student_id, p.plan_id) from public.student_fee_plans p where p.academic_year_id = '2c000000-0000-4000-fc00-000000000002'
+    union all select concat_ws(',', 'asg', ta.id, ta.staff_id, ta.section_id, ta.subject_id, ta.periods_per_week) from public.teacher_assignments ta join public.sections s on s.id = ta.section_id where s.academic_year_id = '2c000000-0000-4000-fc00-000000000002'
     union all select concat_ws(',', 'conc', c.id, c.student_id) from public.fee_concessions c where c.academic_year_id = '2c000000-0000-4000-fc00-000000000002'
     union all select concat_ws(',', 'yr', y.id, y.status, y.is_current) from public.academic_years y where y.id in ('2c000000-0000-4000-fc00-000000000001', '2c000000-0000-4000-fc00-000000000002')
   ) x), ''))
@@ -149,6 +154,7 @@ select pg_temp.ok((select (j -> 'summary' ->> 'carried_dues_paise')::bigint from
 select pg_temp.ok((select pg_temp.sec_of(j, 'RO K2', 'A') ->> 'medium' from _p) = 'Telugu' and (select pg_temp.sec_of(j, 'RO K2', 'A') ->> 'class_teacher_id' from _p) = '1a000000-0000-4000-fc00-000000000002', 'preview: medium and class teacher carry over from the old section');
 select pg_temp.ok((select pg_temp.sec_of(j, 'RO K2', 'B') ->> 'medium' from _p) = 'English', 'preview: K2-B keeps English');
 select pg_temp.ok((select pg_temp.check_of(j, 'new_year') || pg_temp.check_of(j, 'fee_structure') || pg_temp.check_of(j, 'class_subjects') || pg_temp.check_of(j, 'all_placed') || pg_temp.check_of(j, 'section_size') from _p) = 'okokokokok', 'checklist: year, fees, subjects, placement and size are green');
+select pg_temp.ok((select (j -> 'summary' ->> 'assignments_to_copy')::int from _p) = 2, 'preview: 2 subject-teacher assignments will be copied (K2-A and K3-A; K1-A is not created unless someone is detained)');
 select pg_temp.ok((select pg_temp.check_of(j, 'results_locked') from _p) = 'warn', 'checklist: a result that is not locked is only a warning');
 select pg_temp.ok((select (j ->> 'can_confirm')::boolean from _p), 'checklist: nothing red, so Confirm is possible');
 select pg_temp.ok((select pg_temp.fp_old() = old_fp and pg_temp.fp_touched() = touched_fp from _fp), 'preview changes nothing at all');
@@ -197,6 +203,11 @@ select pg_temp.ok((select y.status || y.is_current::text from public.academic_ye
               and (select y.status || y.is_current::text from public.academic_years y where y.id = '2c000000-0000-4000-fc00-000000000002') = 'activetrue', 'confirm: the old year is closed, the new year is current');
 select pg_temp.ok((select pg_temp.fp_old() = old_fp from _fp), 'confirm: the OLD year (enrolments, dues, receipts, attendance, marks, results, plans, concessions) is exactly as it was');
 
+-- teacher assignments
+select pg_temp.counts($$select count(*) from public.teacher_assignments ta join public.sections s on s.id = ta.section_id where s.academic_year_id = '2c000000-0000-4000-fc00-000000000002' and ta.staff_id = '1a000000-0000-4000-fc00-000000000002' and ta.subject_id = '5c100000-0000-4000-fc00-000000000001'$$, 3, 'assignments: the same teacher and subject are copied to the new sections');
+select pg_temp.ok((select string_agg(c.name || s.name || ta.periods_per_week, ',' order by c.name) from public.teacher_assignments ta join public.sections s on s.id = ta.section_id join public.classes c on c.id = s.class_id where s.academic_year_id = '2c000000-0000-4000-fc00-000000000002') = 'RO K1A6,RO K2A6,RO K3A5', 'assignments: K1-A (detained) and K2-A copy K1-A''s, K3-A copies K2-A''s (periods too)');
+select pg_temp.ok((select (j -> 'summary' ->> 'assignments_copied')::int from _c) = 3, 'assignments: the result says 3 were copied');
+select pg_temp.counts($$select count(*) from public.teacher_assignments ta join public.sections s on s.id = ta.section_id where s.academic_year_id = '2c000000-0000-4000-fc00-000000000001'$$, 2, 'assignments: the old year''s assignments are untouched (still 2)');
 -- fees
 select pg_temp.counts($$select count(*) from public.student_fee_dues where academic_year_id = '2c000000-0000-4000-fc00-000000000002' and student_id = '56c00000-0000-4000-fc00-000000000003'$$, 12, 'fees: the new year''s dues come from the new fee structure (12 monthly)');
 select pg_temp.counts($$select count(*) from public.student_fee_dues where academic_year_id = '2c000000-0000-4000-fc00-000000000002' and student_id in ('56c00000-0000-4000-fc00-000000000004', '56c00000-0000-4000-fc00-000000000007', '56c00000-0000-4000-fc00-000000000008')$$, 0, 'fees: leavers get no new-year dues');
@@ -241,7 +252,7 @@ select pg_temp.login_as('00000000-0000-4000-fc00-000000000001');
 create temp table _run as select (j ->> 'run_id')::uuid id from _c;
 grant all on _run to authenticated;
 grant execute on function pg_temp.blocked_by(uuid, text, uuid, text) to authenticated;
-select pg_temp.ok((select (public.rollover_undo_check(id) ->> 'allowed')::boolean from _run), 'undo check: allowed while nothing has been recorded in the new year');
+select pg_temp.ok((select (public.rollover_undo_check(id) ->> 'allowed')::boolean from _run), 'undo check: allowed while nothing has been recorded in the new year (the copied assignments do not block it)');
 select pg_temp.ok(pg_temp.blocked_by(null, $$insert into public.attendance_sessions (academic_year_id, section_id, att_date, session, kind, status) select '2c000000-0000-4000-fc00-000000000002', id, '2075-07-01', 'morning', 'regular', 'marked' from public.sections where academic_year_id = '2c000000-0000-4000-fc00-000000000002' limit 1$$, (select id from _run), 'attendance'), 'undo refused: attendance marked in the new year (with the reason and what to do instead)');
 select pg_temp.ok(pg_temp.blocked_by(null, $$insert into public.exam_components (id, academic_year_id, class_id, name, max_marks) values ('65c00000-0000-4000-fc00-000000000009', '2c000000-0000-4000-fc00-000000000002', '3c100000-0000-4000-fc00-000000000002', 'RO FA9', 20)$$, (select id from _run), 'marks') = false, 'an exam set up in the new year alone is not "work" (no marks yet)');
 select pg_temp.ok(pg_temp.blocked_by(null, $$insert into public.marks (academic_year_id, class_id, section_id, student_id, component_id, subject_id, status, marks) select '2c000000-0000-4000-fc00-000000000002', s.class_id, e.section_id, e.student_id, (select id from public.exam_components where name = 'RO FA1' limit 1), '5c100000-0000-4000-fc00-000000000001', 'marked', 5 from public.student_enrollments e join public.sections s on s.id = e.section_id where e.academic_year_id = '2c000000-0000-4000-fc00-000000000002' limit 1$$, (select id from _run), 'marks'), 'undo refused: marks entered in the new year');
@@ -251,13 +262,17 @@ select pg_temp.ok(pg_temp.blocked_by(null, $$update public.student_enrollments s
 select pg_temp.ok(pg_temp.blocked_by(null, $$insert into public.students (id, admission_no, full_name, gender, date_of_birth, admission_date) values ('56c00000-0000-4000-fc00-000000000011', 'RO-11', 'Late Joiner', 'male', '2072-01-01', '2075-07-01'); insert into public.student_enrollments (student_id, academic_year_id, section_id) select '56c00000-0000-4000-fc00-000000000011', '2c000000-0000-4000-fc00-000000000002', id from public.sections where academic_year_id = '2c000000-0000-4000-fc00-000000000002' limit 1$$, (select id from _run), 'new_admission'), 'undo refused: a new admission after the rollover');
 select pg_temp.ok(pg_temp.blocked_by(null, $$insert into public.fee_concessions (student_id, academic_year_id, fee_head_id, kind, percent_bp, reason) values ('56c00000-0000-4000-fc00-000000000003', '2c000000-0000-4000-fc00-000000000002', '62c00000-0000-4000-fc00-000000000001', 'percent', 500, 'Re-approved')$$, (select id from _run), 'fee_changes'), 'undo refused: a concession approved in the new year');
 select pg_temp.ok(pg_temp.blocked_by(null, $$insert into public.timetable_entries (academic_year_id, section_id, weekday, period_no, activity) select '2c000000-0000-4000-fc00-000000000002', id, 1, 1, 'Assembly' from public.sections where academic_year_id = '2c000000-0000-4000-fc00-000000000002' and id <> '3d100000-0000-4000-fc00-000000000005' limit 1$$, (select id from _run), 'section_used'), 'undo refused: the new sections are already used elsewhere (timetable)');
+select pg_temp.ok(pg_temp.blocked_by(null, $$update public.teacher_assignments set periods_per_week = 9 where section_id in (select id from public.sections where academic_year_id = '2c000000-0000-4000-fc00-000000000002') and periods_per_week = 6$$, (select id from _run), 'assignments_changed'), 'undo refused: a copied assignment changed by hand');
+select pg_temp.ok(pg_temp.blocked_by(null, $$delete from public.teacher_assignments where section_id in (select id from public.sections where academic_year_id = '2c000000-0000-4000-fc00-000000000002') and periods_per_week = 5$$, (select id from _run), 'assignments_changed'), 'undo refused: a copied assignment removed by hand');
+select pg_temp.ok(pg_temp.blocked_by(null, $$insert into public.teacher_assignments (staff_id, section_id, subject_id) select '1a000000-0000-4000-fc00-000000000003', id, '5c100000-0000-4000-fc00-000000000001' from public.sections where academic_year_id = '2c000000-0000-4000-fc00-000000000002' and id <> '3d100000-0000-4000-fc00-000000000005' limit 1$$, (select id from _run), 'assignments_changed'), 'undo refused: a new assignment added by hand to a new section');
 select pg_temp.ok((select (public.rollover_undo_check(id) ->> 'allowed')::boolean from _run), 'undo check: still allowed after those trials were rolled back');
 
 -- ================= UNDO restores exactly
 create temp table _u as select public.rollover_undo((select id from _run)) j;
 grant all on _u to authenticated;
 select pg_temp.ok((select pg_temp.fp_touched() = touched_fp from _fp), 'undo: everything the rollover touched is exactly as before (sections, enrolments, dues, plans, students, years)');
-select pg_temp.ok((select pg_temp.fp_old() = old_fp from _fp), 'undo: the OLD year is exactly as it was');
+select pg_temp.ok((select pg_temp.fp_old() = old_fp from _fp), 'undo: the OLD year (including its teacher assignments) is exactly as it was');
+select pg_temp.counts($$select count(*) from public.teacher_assignments ta join public.sections s on s.id = ta.section_id where s.academic_year_id = '2c000000-0000-4000-fc00-000000000002'$$, 0, 'undo: the copied assignments are removed');
 select pg_temp.ok((select e.roll_no::text || s.name from public.student_enrollments e join public.sections s on s.id = e.section_id where e.student_id = '56c00000-0000-4000-fc00-000000000010') = '5B', 'undo: the new admission is back in its section with its own roll number');
 select pg_temp.ok((select status from public.students where id = '56c00000-0000-4000-fc00-000000000007') = 'active' and (select status from public.students where id = '56c00000-0000-4000-fc00-000000000009') = 'left' and (select status_reason from public.students where id = '56c00000-0000-4000-fc00-000000000009') = 'Moved away', 'undo: students are back (the mid-year leaver is still Left with his reason)');
 select pg_temp.ok((select y.is_current from public.academic_years y where y.id = '2c000000-0000-4000-fc00-000000000001') and not (select y.is_current from public.academic_years y where y.id = '2c000000-0000-4000-fc00-000000000002'), 'undo: the old year is current again');

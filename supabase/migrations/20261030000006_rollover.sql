@@ -76,7 +76,7 @@ begin
     dues_paise bigint not null default 0, problem text
   ) on commit drop;
   create temp table _ro_secs (
-    to_class_id uuid, to_class text, name text, existing_id uuid, medium text, teacher_id uuid, teacher_name text, n int not null default 0,
+    to_class_id uuid, to_class text, name text, existing_id uuid, src_id uuid, medium text, teacher_id uuid, teacher_name text, n int not null default 0,
     primary key (to_class_id, name)
   ) on commit drop;
 
@@ -134,6 +134,7 @@ begin
    where s.academic_year_id = p_to and not exists (select 1 from _ro_secs x where x.to_class_id = s.class_id and x.name = s.name);
   -- new sections inherit medium and class teacher from the old section they come from (the class below, else the same class), unless the Admin changes them
   update _ro_secs x set
+    src_id = src.id,
     medium = coalesce(nullif(pl -> 'sections' -> (x.to_class_id::text || ':' || x.name) ->> 'medium', ''), src.medium),
     teacher_id = case when pl -> 'sections' -> (x.to_class_id::text || ':' || x.name) ? 'class_teacher_id'
                       then nullif(pl -> 'sections' -> (x.to_class_id::text || ':' || x.name) ->> 'class_teacher_id', '')::uuid
@@ -244,7 +245,11 @@ begin
     'new_sections_created', (select count(*) from _ro_secs where existing_id is null and n > 0),
     'carried_dues_paise', coalesce((select sum(dues_paise) from _ro_rows where outcome in ('promote', 'detain')), 0),
     'carried_dues_students', (select count(*) from _ro_rows where outcome in ('promote', 'detain') and dues_paise > 0),
-    'leavers_dues_paise', coalesce((select sum(dues_paise) from _ro_rows where outcome in ('passed_out', 'left')), 0));
+    'leavers_dues_paise', coalesce((select sum(dues_paise) from _ro_rows where outcome in ('passed_out', 'left')), 0),
+    'assignments_to_copy', case when coalesce((pl ->> 'copy_assignments')::boolean, true) then
+        (select count(*) from _ro_secs x join public.teacher_assignments ta on ta.section_id = x.src_id join public.staff st on st.id = ta.staff_id and st.status = 'active'
+          where x.existing_id is null and x.n > 0
+            and exists (select 1 from public.class_subjects cs where cs.academic_year_id = p_to and cs.class_id = x.to_class_id and cs.subject_id = ta.subject_id)) else 0 end);
 
   return jsonb_build_object('from_year', jsonb_build_object('id', yf.id, 'name', yf.name), 'to_year', jsonb_build_object('id', yt.id, 'name', yt.name),
     'max_size', maxsz, 'roll_order', ord, 'summary', summary, 'classes', classes_json, 'sections', secs_json, 'students', rows_json,
@@ -274,6 +279,8 @@ declare
   new_secs uuid[] := '{}';
   new_enrs jsonb := '[]'::jsonb;
   new_plans uuid[] := '{}';
+  new_asg uuid[] := '{}';
+  asg_ids uuid[];
   plan_new uuid;
   mapped uuid;
   plans_missing int := 0;
@@ -308,6 +315,18 @@ begin
     insert into public.sections (academic_year_id, class_id, name, medium, class_teacher_id)
     values (p_to, sec.to_class_id, sec.name, sec.medium, sec.teacher_id) returning id into sec_id;
     new_secs := new_secs || sec_id;
+    -- subject-teacher assignments are copied from the section the cohort comes from (same teacher, same subject); the Admin can change them afterwards
+    if coalesce((p_plan ->> 'copy_assignments')::boolean, true) and sec.src_id is not null then
+      with ins as (
+        insert into public.teacher_assignments (staff_id, section_id, subject_id, periods_per_week)
+        select ta.staff_id, sec_id, ta.subject_id, ta.periods_per_week
+          from public.teacher_assignments ta join public.staff st on st.id = ta.staff_id and st.status = 'active'
+         where ta.section_id = sec.src_id
+           and exists (select 1 from public.class_subjects cs where cs.academic_year_id = p_to and cs.class_id = sec.to_class_id and cs.subject_id = ta.subject_id)
+        on conflict do nothing returning id)
+      select coalesce(array_agg(id), '{}') into asg_ids from ins;
+      new_asg := new_asg || asg_ids;
+    end if;
   end loop;
 
   -- 2. leavers
@@ -345,14 +364,14 @@ begin
   update public.academic_years set is_current = true, status = 'active' where id = p_to;
 
   select coalesce(max(id), 0) into mark from public.audit_logs;
-  sm := (v -> 'summary') || jsonb_build_object('plans_not_matched', plans_missing, 'fee_plans_carried', coalesce(cardinality(new_plans), 0),
+  sm := (v -> 'summary') || jsonb_build_object('plans_not_matched', plans_missing, 'fee_plans_carried', coalesce(cardinality(new_plans), 0), 'assignments_copied', coalesce(cardinality(new_asg), 0),
                                               'enrollments_created', jsonb_array_length(new_enrs), 'students_affected', jsonb_array_length(new_enrs) + jsonb_array_length(snap_students) + jsonb_array_length(snap_adopted));
   insert into public.rollover_runs (id, from_year_id, to_year_id, plan, snapshot, summary, audit_mark, applied_by)
   values (run_id, p_from, p_to, coalesce(p_plan, '{}'::jsonb),
           jsonb_build_object('years', jsonb_build_array(
                 jsonb_build_object('id', yf.id, 'status', yf.status, 'is_current', yf.is_current),
                 jsonb_build_object('id', yt.id, 'status', yt.status, 'is_current', yt.is_current)),
-              'students', snap_students, 'adopted', snap_adopted, 'sections', to_jsonb(new_secs), 'enrollments', new_enrs, 'fee_plans', to_jsonb(new_plans)),
+              'students', snap_students, 'adopted', snap_adopted, 'sections', to_jsonb(new_secs), 'assignments', to_jsonb(new_asg), 'enrollments', new_enrs, 'fee_plans', to_jsonb(new_plans)),
           sm, mark, auth.uid());
   perform public.log_event('rollover.confirm', 'rollover_runs', run_id::text,
     jsonb_build_object('summary', 'Year rollover ' || yf.name || ' → ' || yt.name, 'from', yf.name, 'to', yt.name, 'students_affected', sm -> 'students_affected',
@@ -404,10 +423,13 @@ begin
   select count(*) into n from public.audit_logs a
    where a.id > run.audit_mark and a.table_name in ('fee_concessions', 'student_fee_plans') and (coalesce(a.new_data, a.old_data) ->> 'academic_year_id') = run.to_year_id::text;
   if n > 0 then out := out || jsonb_build_object('key', 'fee_changes', 'text', 'Fee concessions or plans have been changed in the new year (' || n || ' changes)', 'count', n); end if;
+  select count(*) into n from public.audit_logs a
+   where a.id > run.audit_mark and a.table_name = 'teacher_assignments' and (coalesce(a.new_data, a.old_data) ->> 'section_id') in (select x::text from unnest(sec_ids) x);
+  if n > 0 then out := out || jsonb_build_object('key', 'assignments_changed', 'text', 'Teacher assignments of the new sections have been changed by hand since the rollover (' || n || ' changes)', 'count', n); end if;
   -- anything else already hanging on the new sections (timetable, teacher assignments, ...)
   for fk in select c.conrelid::regclass::text tbl, a.attname col
               from pg_constraint c join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
-             where c.contype = 'f' and c.confrelid = 'public.sections'::regclass and c.conrelid <> 'public.student_enrollments'::regclass loop
+             where c.contype = 'f' and c.confrelid = 'public.sections'::regclass and c.conrelid <> 'public.student_enrollments'::regclass and c.conrelid <> 'public.teacher_assignments'::regclass loop
     execute format('select count(*) from %s where %I = any($1)', fk.tbl, fk.col) into n using sec_ids;
     if n > 0 then out := out || jsonb_build_object('key', 'section_used', 'text', 'The new sections are already used in ' || replace(replace(fk.tbl, 'public.', ''), '_', ' ') || ' (' || n || ')', 'count', n); end if;
   end loop;
@@ -449,6 +471,7 @@ begin
   stu_ids  := coalesce(array(select (v ->> 'student_id')::uuid from jsonb_array_elements(run.snapshot -> 'enrollments') v), '{}');
   plan_ids := coalesce(array(select (v #>> '{}')::uuid from jsonb_array_elements(run.snapshot -> 'fee_plans') v), '{}');
 
+  delete from public.teacher_assignments where id in (select (v #>> '{}')::uuid from jsonb_array_elements(coalesce(run.snapshot -> 'assignments', '[]'::jsonb)) v);
   delete from public.student_fee_plans where id = any (plan_ids);
   delete from public.student_enrollments where id = any (enr_ids);
   delete from public.student_fee_dues where academic_year_id = run.to_year_id and student_id = any (stu_ids);   -- made by the rollover; nothing is paid on them (checked above)
