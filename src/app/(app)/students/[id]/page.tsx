@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ClipboardPen, GraduationCap, Pencil } from "lucide-react";
+import { GraduationCap, Pencil } from "lucide-react";
 import { requireStaff } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
@@ -13,6 +13,8 @@ import { GROUP_LABEL, maskId, missingGovFields, STATUS_LABEL } from "@/features/
 import { DocumentsPanel, RevealIdsButton, SavedToast, StatusButton } from "./client";
 import { StudentFeesPanel } from "./fees-panel";
 import { StudentAttendancePanel } from "./attendance-panel";
+import { MarksPanel } from "./marks-panel";
+import { getStudentMarks } from "@/features/students/marks";
 
 export const metadata = { title: "Student" };
 
@@ -250,12 +252,14 @@ export default async function StudentProfilePage({ params, searchParams }: { par
         <StudentAttendancePanel studentId={s.id} month={month} canTc={canTc} tcFrom={tcFrom} tcTo={tcTo} admissionDate={s.admission_date} />
       )}
 
-      {tab === "marks" && (
-        <EmptyState title="Coming soon">
-          <ClipboardPen className="mr-1 inline size-4" />
-          Marks and report cards will appear here with the Exams & marks module.
-        </EmptyState>
-      )}
+      {tab === "marks" && <MarksTab studentId={s.id} ownOnly={me.role !== "admin" && !me.duties.includes("all_class_marks")} />}
     </>
   );
+}
+
+/** Marks and results: the database limits what comes back to this person (a teacher: their own subjects; Admin, the marks duty and the class teacher: the report card). */
+async function MarksTab({ studentId, ownOnly }: { studentId: string; ownOnly: boolean }) {
+  const supabase = await createClient();
+  const m = await getStudentMarks(supabase, studentId);
+  return <MarksPanel studentId={studentId} yearName={m.yearName} className={m.className} groups={m.groups} ownOnly={ownOnly && !m.groups.some((g) => g.source === "card")} />;
 }
