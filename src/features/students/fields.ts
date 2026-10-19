@@ -18,6 +18,14 @@ export const GROUP_LABEL: Record<StudentFieldDefinition["field_group"], string> 
   other: "Other",
 };
 
+/** Telugu spellings used on Telugu certificates. Typed by a Telugu speaker (in the form or in Excel); never sent to a translation service. */
+export const TELUGU_NAME_KEYS = ["name_te", "father_name_te", "mother_name_te"] as const;
+/** The Telugu name fields first, so they sit right after the name and parent columns in the Excel template and in the export. */
+export function orderDefinitions<T extends { key: string }>(defs: T[]): T[] {
+  const rank = (k: string) => (TELUGU_NAME_KEYS as readonly string[]).indexOf(k);
+  return [...defs.filter((d) => rank(d.key) >= 0).sort((a, b) => rank(a.key) - rank(b.key)), ...defs.filter((d) => rank(d.key) < 0)];
+}
+
 export const PHONE_RE = /^[6-9][0-9]{9}$/;
 export const PIN_RE = /^[1-9][0-9]{5}$/;
 

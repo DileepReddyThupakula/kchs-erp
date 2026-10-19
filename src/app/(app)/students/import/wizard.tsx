@@ -10,16 +10,16 @@ import { DataTable, type Column } from "@/components/data-table/data-table";
 import { exportSheets, type ExportCell } from "@/lib/export";
 import { logExport } from "@/features/audit/actions";
 import { commitImport, validateImport, type ImportCheck } from "@/features/students/actions";
-import { CORE_COLUMNS, toIsoDate, type RawRow } from "@/features/students/fields";
+import { CORE_COLUMNS, orderDefinitions, TELUGU_NAME_KEYS, toIsoDate, type RawRow } from "@/features/students/fields";
 import type { StudentFieldDefinition } from "@/types/database";
 
 type Result = { rowNo: number; admissionNo: string; outcome: "imported" | "skipped" | "failed"; message?: string };
 type TemplateColumn = { key: string; label: string; required: boolean; allowed: string; gov?: boolean };
 
-function templateColumns(defs: StudentFieldDefinition[]): TemplateColumn[] {
+export function templateColumns(defs: StudentFieldDefinition[]): TemplateColumn[] {
   return [
     ...CORE_COLUMNS.map((c) => ({ key: c.key, label: c.label, required: c.required, allowed: c.help })),
-    ...defs.map((d) => ({
+    ...orderDefinitions(defs).map((d) => ({
       key: d.key,
       label: d.label,
       required: false,
@@ -37,7 +37,9 @@ function templateColumns(defs: StudentFieldDefinition[]): TemplateColumn[] {
                   ? "Number"
                   : d.sensitive
                     ? `${d.help ?? ""} (stored encrypted)`.trim()
-                    : (d.help ?? ""),
+                    : (TELUGU_NAME_KEYS as readonly string[]).includes(d.key)
+                      ? "Telugu spelling exactly as it should print (typed by a Telugu speaker; the system never translates it)"
+                      : (d.help ?? ""),
     })),
   ];
 }

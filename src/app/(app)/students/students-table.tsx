@@ -14,7 +14,7 @@ import { Select } from "@/components/ui/form";
 import { exportSheets, type ExportCell, type ExportFormat } from "@/lib/export";
 import { logExport } from "@/features/audit/actions";
 import { changeStudentsSection, studentsForExport } from "@/features/students/actions";
-import { GROUP_LABEL, maskId, STATUS_LABEL } from "@/features/students/fields";
+import { GROUP_LABEL, maskId, orderDefinitions, STATUS_LABEL, TELUGU_NAME_KEYS } from "@/features/students/fields";
 import type { StudentRow, SectionOption } from "@/features/students/queries";
 import type { StudentFieldDefinition } from "@/types/database";
 import { formatDate } from "@/lib/utils";
@@ -260,7 +260,7 @@ export function StudentsTable({
 // ------------------------------------------------------------------ export with field picker
 type FieldOpt = { id: string; label: string; group: string; value: (r: StudentRow) => ExportCell; defaultOn?: boolean };
 
-function exportFields(manage: boolean, definitions: StudentFieldDefinition[]): FieldOpt[] {
+export function exportFields(manage: boolean, definitions: StudentFieldDefinition[]): FieldOpt[] {
   const base: FieldOpt[] = [
     { id: "adm", label: "Admission no", group: "Basic", value: (r) => r.admission_no, defaultOn: true },
     { id: "name", label: "Student name", group: "Basic", value: (r) => r.full_name, defaultOn: true },
@@ -285,10 +285,10 @@ function exportFields(manage: boolean, definitions: StudentFieldDefinition[]): F
     { id: "status", label: "Status", group: "Basic", value: (r) => STATUS_LABEL[r.status] },
     { id: "missing_docs", label: "Missing documents", group: "Checks", value: (r) => r.missingDocs?.join(", ") || "" },
     { id: "missing_gov", label: "Missing govt. fields", group: "Checks", value: (r) => r.missingGov?.join(", ") || "" },
-    ...definitions.map<FieldOpt>((d) => ({
+    ...orderDefinitions(definitions).map<FieldOpt>((d) => ({
       id: `def:${d.key}`,
       label: d.sensitive ? `${d.label} (masked)` : d.label,
-      group: d.sensitive ? "IDs (always masked)" : GROUP_LABEL[d.field_group],
+      group: d.sensitive ? "IDs (always masked)" : (TELUGU_NAME_KEYS as readonly string[]).includes(d.key) ? "Telugu names" : GROUP_LABEL[d.field_group],
       value: (r) => {
         if (d.sensitive) return maskId(r.masked?.[d.key]);
         const v = r.details?.[d.key];
