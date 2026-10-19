@@ -152,7 +152,7 @@ export const PAGES: PageDef[] = [
 
   // ---------------------------------------------------------------- administration
   { path: "/settings", name: "School settings", icon: Settings, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "Administration" }, description: "School details, branding and calendar settings." },
-  { path: "/audit-log", name: "Audit log", icon: UserRound, module: "audit", status: "planned", access: { admin: true }, menu: { admin: "Administration" }, description: "Who changed what and when, across every module, including exports and duty changes." },
+  { path: "/audit-log", name: "Audit log", icon: UserRound, module: "audit", status: "built", access: { admin: true }, menu: { admin: "Administration" }, description: "Who changed what and when, across every module, including exports and duty changes." },
   { path: "/roadmap", name: "Roadmap", icon: MapIcon, module: "foundation", status: "built", access: { admin: true }, menu: { admin: "Administration" }, description: "Every module with its pages and progress." },
 ];
 

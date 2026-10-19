@@ -5,6 +5,7 @@ import { can, DUTY_INFO, type Duty } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils";
 import { Badge, Card, PageHeader, RoleBadge, StatusChip } from "@/components/ui/card";
+import { HistoryLink } from "@/components/audit/history-link";
 import { EditDetailsButton } from "./edit-details";
 import { LoginPanel } from "./login-panel";
 import { DutiesPanel } from "./duties-panel";
@@ -28,7 +29,12 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
         icon={<UserRound />}
         title={s.full_name}
         description={`${s.employee_code} · ${s.designation ?? "No designation"}`}
-        actions={editable && <EditDetailsButton staff={s} />}
+        actions={
+          <>
+            {me.role === "admin" && <HistoryLink table="staff" id={s.id} />}
+            {editable && <EditDetailsButton staff={s} />}
+          </>
+        }
       />
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <Card>

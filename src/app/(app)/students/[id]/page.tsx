@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils";
+import { HistoryLink } from "@/components/audit/history-link";
 import { Badge, Card, EmptyState, PageHeader, StatusChip } from "@/components/ui/card";
 import { LinkTabs } from "@/components/ui/tabs";
 import { buttonClasses } from "@/components/ui/button-classes";
@@ -87,6 +88,7 @@ export default async function StudentProfilePage({ params, searchParams }: { par
           <>
             <StatusChip status={s.status} label={STATUS_LABEL[s.status]} />
             {can(me, "students.status") && <StatusButton id={s.id} status={s.status} />}
+            {me.role === "admin" && <HistoryLink table="students" id={s.id} />}
             {manage && (
               <Link href={`/students/${id}/edit`} className={buttonClasses("primary")}>
                 <Pencil className="size-4" aria-hidden /> Edit

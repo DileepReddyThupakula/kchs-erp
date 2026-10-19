@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/utils";
 import { Receipt as ReceiptPaper } from "@/components/fees/receipt";
 import { getReceiptSchool } from "@/features/fees/receipt-school";
 import { getReceiptDetail } from "@/features/fees/queries";
+import { HistoryLink } from "@/components/audit/history-link";
 import { ReceiptActions } from "./actions";
 
 export const metadata = { title: "Receipt" };
@@ -32,6 +33,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
           <>
             {r.status === "cancelled" ? <StatusChip status="left" label="Cancelled" /> : <StatusChip status="active" label="Valid" />}
             {r.kind === "misc" && <Badge tone="gold">Miscellaneous</Badge>}
+            {me.role === "admin" && <HistoryLink table="fee_receipts" id={r.id} />}
             <ReceiptActions id={r.id} receiptNo={r.receiptNo} total={r.total} canCancel={can(me, "fees.cancelReceipt")} cancelled={r.status === "cancelled"} />
           </>
         }

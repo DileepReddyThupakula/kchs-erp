@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { boardRows } from "@/features/notices/diary-workflow";
 import { SESSION_LABEL, type SessionName } from "@/features/attendance/shared";
 import { FeeTiles, type FeeBlock } from "./fee-tiles";
+import { AuditAlertCards } from "./audit-alerts";
+import type { AuditAlerts } from "@/features/audit/shared";
 
 /** What `public.admin_dashboard()` returns: everything the Admin dashboard shows, from ONE database call. */
 export type AdminDashboardData = {
@@ -16,6 +18,8 @@ export type AdminDashboardData = {
   attendance_today?: { students_marked: number; students_present: number };
   /** null unless the person has fee access */
   fees?: FeeBlock;
+  /** Module 9: things worth a look in the last 7 days (Admin only) */
+  alerts?: AuditAlerts;
   diary: { section_id: string; label: string; class_order: number; expected: number; submitted: number; published: number; pending: number; skipped: number }[];
 };
 
@@ -43,6 +47,7 @@ export function AdminDashboardCards({ data, today, deadline }: { data: AdminDash
   return (
     <>
       <FeeTiles fees={data.fees ?? null} />
+      {data.alerts && <AuditAlertCards alerts={data.alerts} today={today} />}
       {important.length > 0 && (
         <section aria-label="Important notices" className="mb-4 space-y-2">
           {important.map((n) => (
