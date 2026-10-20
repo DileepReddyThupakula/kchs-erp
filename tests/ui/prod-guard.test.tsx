@@ -58,7 +58,7 @@ describe("which project does the environment point at", () => {
 const GUARDED = [
   "scripts/seed-school.mjs", "scripts/seed-demo.mjs", "scripts/wipe-demo.mjs", "scripts/demo-attendance.mjs", "scripts/demo-bulk-students.mjs", "scripts/demo-data.mjs", "scripts/demo-exams.mjs",
   "scripts/demo-fees.mjs", "scripts/demo-notices.mjs", "scripts/demo-students.mjs", "scripts/demo-timetable.mjs", "scripts/set-logo.mjs", "scripts/test-db.mjs", "scripts/perf-measure.mjs",
-  "scripts/dev/q.mjs", "scripts/dev/explain-as.mjs", "scripts/dev/exam-snapshot.mjs", "scripts/dev/check-demo-clean.mjs", "scripts/reset-admin-password.mjs", "scripts/apply-migration.mjs", "scripts/backup/db.mjs", "scripts/backup/files.mjs",
+  "scripts/dev/q.mjs", "scripts/dev/explain-as.mjs", "scripts/dev/exam-snapshot.mjs", "scripts/dev/check-demo-clean.mjs", "scripts/reset-admin-password.mjs", "scripts/create-first-admin.mjs", "scripts/apply-migration.mjs", "scripts/backup/db.mjs", "scripts/backup/files.mjs",
 ];
 describe("every seed / wipe / demo / test script refuses production", () => {
   for (const f of GUARDED) {

@@ -41,3 +41,38 @@ Dashboard layout changes from time to time: use the search box at the top if a n
 - **Emergency Admin password reset** (only if the Admin has forgotten the password and nobody else can reset it): `npm run reset-admin-password -- --production` on your Mac. It asks for the project name, the Admin's login ID, and the new password twice (hidden). The Admin must then choose a new password at once.
 - **The first Admin script (to be built) will recommend a real email** for the Admin.
 - **File name:** the production settings file is `.env.kchs-production` (not `.env.production.local`: Next.js loads that name by itself). `npm run build` refuses to run if the unsafe name exists.
+
+## E. GO-LIVE ORDER (final; each step only after the one before is done)
+Tick each box. Names of settings only: values are never written here.
+
+1. **[ ] Production database up to date.** `npm run db:apply -- --all --production --dry-run` shows exactly one file, `20261031000005_login_id.sql` (56 -> 57); you type APPLY in the chat; then it is applied and compared with dev. *(Status: dry run done and shown; waiting for your APPLY.)*
+2. **[ ] Supabase dashboard settings** (section A above): sign-up OFF, minimum password length 10, rate limits read and noted, session expiry noted, leaked-password protection if the plan allows, only the Email provider on.
+3. **[ ] Vercel project settings and variables** (sections F and G below), **Production environment only**.
+4. **[ ] Deploy** the `main` branch to Production (the repo's `vercel.json` pins the server functions to Mumbai, `bom1`). Open the first deployment's logs and check the function region says Mumbai. Do NOT sign in yet.
+5. **[ ] Domain**: add it in Vercel (Settings, Domains), set the DNS records Vercel shows, wait for HTTPS ("Valid Configuration").
+6. **[ ] Supabase Site URL**: Authentication, URL configuration: Site URL = the real domain (https), Redirect URLs = the same domain only; remove any `localhost` entry.
+7. **[ ] First Admin** (you, on your Mac, last on purpose so no unused login waits around): `npm run create-first-admin -- --production`. It asks for the project name (`kchs-erp-prod`), your full name, a login ID (**a real email is recommended**), the password twice (hidden). It refuses if an Admin already exists.
+8. **[ ] Smoke test on the real domain**: (a) the sign-in page shows the school name and logo; (b) sign in as the new Admin with the password you typed; (c) you are sent to "Choose your own password": set your real one; (d) the dashboard loads; (e) Settings opens and saves a harmless change; (f) the audit log shows your sign-in and the password change, and your mobile number (if any) is masked; (g) sign out, then try a wrong password once: the same generic message; (h) public sign-up is closed: the address `https://<project>.supabase.co/auth/v1/signup` with the public key answers "signups not allowed" (ask me to test it); (i) the security headers are present (ask me to check).
+9. **[ ] First backup**: `npm run backup:db -- --production` and `npm run restore:check` with your real key (docs/BACKUP.md); copy to Google Drive and the external drive.
+10. **[ ] Keep-alive**: set the GitHub variables `SUPABASE_URL` and `SUPABASE_ANON_KEY` to production; watch it for a week.
+11. **[ ] Only then** the school set-up by the Admin, and real students (after the security review, R12).
+
+## F. Vercel project `kchs-website`: settings to check or change
+*I could not read this project (the Vercel connection has no access: error 403), so I cannot say which names it holds today. Open Vercel, project `kchs-website`, and check each line. Names only.*
+- **Settings, Git**: connected repository is `DileepReddyThupakula/kchs-erp` (private), Production Branch is `main`. If `kchs-website` is a different, older site, create a NEW project for the ERP instead of reusing it.
+- **Settings, General**: Framework Preset = Next.js; Root Directory = empty (the repo root); Build Command and Output Directory = default (do not override: the build runs the safety check automatically); Node.js version = 20.x or 22.x.
+- **Settings, Functions**: Function Region = Mumbai (bom1). The repo's `vercel.json` already asks for `bom1`; if the plan does not allow it, the deployment shows an error and you set it here (decision PF6).
+- **Settings, Environment Variables**, scope: **Production only** (untick Preview and Development on every line). **Delete** these names if they exist (they must never reach hosting): `DATABASE_URL`, `DEMO_USER_PASSWORD`, `KCHS_TRACE`, `NEXT_DIST_DIR`. **Replace** (do not keep the dev value) these names if they exist: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and any of `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`, `AZURE_TRANSLATOR_ENDPOINT`, `GOOGLE_TRANSLATE_API_KEY`, `TRANSLATION_PROVIDER` that hold values from development. Any other name not in section G: remove it unless you know why it is there.
+- **Preview and Development environments get NO production secrets.** Leave Preview and Development empty for every name in section G. (A preview then cannot sign in: that is intended. If you want previews to work, give them the DEVELOPMENT project's values, never production's.)
+- **Settings, Deployment Protection**: turn on Vercel Authentication for Preview deployments, so nobody outside can open a preview.
+- **Settings, Domains**: only the real domain (plus the automatic `.vercel.app` address).
+
+## G. Hosting variable NAMES for Production (values from `.env.kchs-production` and the dashboards; never pasted into chat or the repo)
+| Name | Needed | Sensitive in Vercel |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | yes | no (public) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | no (public by design) |
+| `SUPABASE_SERVICE_ROLE_KEY` | yes (server only) | **yes: mark Sensitive** |
+| `LOGIN_KEY_SECRET` | yes (sign-in refuses without it) | **yes: mark Sensitive** |
+| `TRANSLATION_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, `AZURE_TRANSLATOR_KEY`, `AZURE_TRANSLATOR_REGION`, `AZURE_TRANSLATOR_ENDPOINT`, `GOOGLE_TRANSLATE_API_KEY` | only the ones for the translation service you choose | keys: **yes, Sensitive** |
+Not to be set in hosting: `DATABASE_URL`, `DEMO_USER_PASSWORD`, `KCHS_ENV`, `KCHS_TRACE`, `NEXT_DIST_DIR`. (Sensitive variables cannot be read back later: keep the values in `.env.kchs-production` and on paper.)

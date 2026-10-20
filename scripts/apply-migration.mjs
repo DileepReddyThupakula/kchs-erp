@@ -3,12 +3,14 @@
 //   npm run db:apply -- supabase/migrations/20261013000001_students.sql        one file (development)
 //   npm run db:apply -- --all                                                  every file not yet applied, in order (development)
 //   npm run db:apply -- --all --production                                     the same on PRODUCTION (reads .env.kchs-production, asks you to confirm)
+//   npm run db:apply -- --all --production --dry-run                           only LIST what would be applied (changes nothing, no confirmation needed)
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import pg from "pg";
 import { useTarget } from "./lib/prod-guard.mjs";
 
-const target = await useTarget("db:apply");           // dev only, unless --production (then: production file + typed confirmation)
+const dry = process.argv.includes("--dry-run");
+const target = await useTarget("db:apply", { confirm: !dry });           // dev only, unless --production (then: production file + typed confirmation)
 const all = process.argv.includes("--all");
 const files = all
   ? readdirSync("supabase/migrations").filter((f) => /^\d{14}_.+\.sql$/.test(f)).sort().map((f) => join("supabase/migrations", f))
@@ -21,6 +23,20 @@ const client = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: 
 await client.connect();
 let applied = 0, skipped = 0;
 try {
+  if (dry) {
+    // read only: which files are already recorded, which would be applied
+    const have = new Set((await client.query("select version from supabase_migrations.schema_migrations")).rows.map((r) => r.version));
+    const todo = files.filter((f) => !have.has(basename(f).slice(0, 14)));
+    const known = new Set(files.map((f) => basename(f).slice(0, 14)));
+    console.log(`DRY RUN on ${target === "production" ? "PRODUCTION" : "the development project"}: nothing is changed.`);
+    console.log(`  migration files in the repo: ${files.length}`);
+    console.log(`  already applied there:       ${have.size}${[...have].some((v) => !known.has(v)) ? "  (WARNING: some recorded versions are not in the repo)" : ""}`);
+    console.log(`  would be applied now:        ${todo.length}`);
+    for (const f of todo) console.log(`    + ${basename(f)}`);
+    console.log(`  result: ${have.size} -> ${have.size + todo.length}`);
+    await client.end();
+    process.exit(0);
+  }
   // a brand-new project has no migration table yet
   await client.query("create schema if not exists supabase_migrations");
   await client.query("create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text, created_by text, idempotency_key text, rollback text[])");
