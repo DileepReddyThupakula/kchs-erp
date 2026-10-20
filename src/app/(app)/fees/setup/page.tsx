@@ -6,7 +6,8 @@ import { getAcademicYears, resolveYear } from "@/lib/settings";
 import { EmptyState, PageHeader } from "@/components/ui/card";
 import { LinkTabs } from "@/components/ui/tabs";
 import { YearPicker } from "@/components/ui/year-picker";
-import { getFeeHeads, getFeeSettings, getStudentLookup } from "@/features/fees/queries";
+import { getFeeSettings, getStudentLookup } from "@/features/fees/queries";
+import type { FeeCampaign, FeeHead, FeePlan, FeePlanInstallment } from "@/types/database";
 import { getSectionOptions } from "@/features/students/queries";
 import { AmountsTab } from "./amounts-tab";
 import { HeadsTab } from "./heads-tab";
@@ -39,17 +40,18 @@ export default async function FeeSetupPage({ searchParams }: { searchParams: Pro
   if (!year) return (<>{header}<EmptyState title="No academic year yet">Create an academic year first.</EmptyState></>);
 
   const q = (t: string) => `/fees/setup?tab=${t}&year=${year.id}`;
-  const [{ all, regular, special }, { data: classes }, { data: plans }, { data: structure }, { data: campaigns }] = await Promise.all([
-    getFeeHeads(supabase),
-    supabase.from("classes").select("id, name, sort_order, is_active").order("sort_order"),
-    supabase.from("fee_plans").select("*").eq("academic_year_id", year.id).order("name"),
-    supabase.from("fee_structure").select("*").eq("academic_year_id", year.id),
-    supabase.from("fee_campaigns").select("*").eq("academic_year_id", year.id).order("created_at", { ascending: false }),
-  ]);
-  const planIds = (plans ?? []).map((p) => p.id);
-  const { data: installments } = planIds.length
-    ? await supabase.from("fee_plan_installments").select("*").in("plan_id", planIds).order("seq")
-    : { data: [] };
+  // ONE database call for every tab: heads, classes, plans, amounts, special fees and the plan instalments
+  const { data: bundle } = await supabase.rpc("fees_setup_page", { p_year: year.id });
+  const b = (bundle as unknown as { heads: FeeHead[]; special: string[]; classes: { id: string; name: string; sort_order: number; is_active: boolean }[]; plans: FeePlan[]; structure: { class_id: string; fee_head_id: string; amount_paise: number; default_plan_id: string | null }[]; campaigns: FeeCampaign[]; installments: FeePlanInstallment[] } | null)
+    ?? { heads: [], special: [], classes: [], plans: [], structure: [], campaigns: [], installments: [] };
+  const all = b.heads;
+  const special = new Set(b.special);
+  const regular = all.filter((h) => !special.has(h.id));
+  const classes = b.classes;
+  const plans = b.plans;
+  const structure = b.structure;
+  const campaigns = b.campaigns;
+  const installments = b.installments;
 
   return (
     <>
@@ -59,8 +61,8 @@ export default async function FeeSetupPage({ searchParams }: { searchParams: Pro
         tabs={[
           { id: "amounts", label: "Amounts per class", href: q("amounts") },
           { id: "heads", label: "Fee heads", href: q("heads"), count: regular.length },
-          { id: "plans", label: "Plans & schedules", href: q("plans"), count: (plans ?? []).filter((p) => !p.name.startsWith("Special: ")).length },
-          { id: "special", label: "Special fees", href: q("special"), count: (campaigns ?? []).length },
+          { id: "plans", label: "Plans & schedules", href: q("plans"), count: plans.filter((p) => !p.name.startsWith("Special: ")).length },
+          { id: "special", label: "Special fees", href: q("special"), count: campaigns.length },
           { id: "payments", label: "Payment QR", href: q("payments") },
         ]}
       />
@@ -69,16 +71,16 @@ export default async function FeeSetupPage({ searchParams }: { searchParams: Pro
       {tab === "plans" && (
         <PlansTab
           yearId={year.id}
-          plans={(plans ?? []).filter((p) => !p.name.startsWith("Special: "))}
-          installments={installments ?? []}
+          plans={plans.filter((p) => !p.name.startsWith("Special: "))}
+          installments={installments}
         />
       )}
       {tab === "special" && (
         <SpecialTabLoader
           yearId={year.id}
           yearName={year.name}
-          campaigns={campaigns ?? []}
-          classes={(classes ?? []).filter((c) => c.is_active)}
+          campaigns={campaigns}
+          classes={classes.filter((c) => c.is_active)}
           heads={all}
           special={special}
         />
@@ -87,10 +89,10 @@ export default async function FeeSetupPage({ searchParams }: { searchParams: Pro
         <AmountsTab
           yearId={year.id}
           yearName={year.name}
-          classes={(classes ?? []).filter((c) => c.is_active).map((c) => ({ id: c.id, name: c.name, order: c.sort_order }))}
+          classes={classes.filter((c) => c.is_active).map((c) => ({ id: c.id, name: c.name, order: c.sort_order }))}
           heads={regular.filter((h) => h.is_active).map((h) => ({ id: h.id, name: h.name }))}
-          plans={(plans ?? []).filter((p) => p.is_active && !p.name.startsWith("Special: ")).map((p) => ({ id: p.id, name: p.name, kind: p.kind }))}
-          structure={(structure ?? []).map((s) => ({ classId: s.class_id, headId: s.fee_head_id, amount: Number(s.amount_paise), planId: s.default_plan_id }))}
+          plans={plans.filter((p) => p.is_active && !p.name.startsWith("Special: ")).map((p) => ({ id: p.id, name: p.name, kind: p.kind }))}
+          structure={structure.map((s) => ({ classId: s.class_id, headId: s.fee_head_id, amount: Number(s.amount_paise), planId: s.default_plan_id }))}
         />
       )}
     </>

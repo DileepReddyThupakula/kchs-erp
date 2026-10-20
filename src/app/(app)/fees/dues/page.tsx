@@ -1,13 +1,10 @@
 import { BadgeIndianRupee } from "lucide-react";
 import { requirePage } from "@/features/students/page-guard";
 import { createClient } from "@/lib/supabase/server";
-import { fetchAll } from "@/lib/fetch-all";
 import { getAcademicYears, resolveYear } from "@/lib/settings";
 import { EmptyState, PageHeader } from "@/components/ui/card";
 import { YearPicker } from "@/components/ui/year-picker";
-import { getFeeHeads, getStudentLookup, toDueRow } from "@/features/fees/queries";
 import { todayIst } from "@/features/fees/shared";
-import { getSectionOptions } from "@/features/students/queries";
 import { DuesTable, type StudentDues } from "./table";
 
 export const metadata = { title: "Dues" };
@@ -28,54 +25,14 @@ export default async function DuesPage({ searchParams }: { searchParams: Promise
   );
   if (!year) return (<>{header}<EmptyState title="No academic year yet">Create an academic year first.</EmptyState></>);
 
-  const [{ all, special }, lookup, sections, dueRows] = await Promise.all([
-    getFeeHeads(supabase),
-    getStudentLookup(supabase, year.id),
-    getSectionOptions(supabase, year.id),
-    fetchAll((f, t) => supabase.from("student_fee_dues").select("*").eq("academic_year_id", year.id).is("voided_at", null).order("due_date").range(f, t)),
-  ]);
-  const heads = new Map(all.map((h) => [h.id, h]));
-  const st = new Map(lookup.map((s) => [s.id, s]));
+  // ONE database call: the students who owe, their unpaid lines, the classes, sections and fee heads (same rules as before: fee access only)
+  const { data } = await supabase.rpc("fees_dues_page", { p_year: year.id, p_today: todayIst() });
+  const page = (data as unknown as { students: StudentDues[]; classes: { id: string; name: string }[]; sections: { id: string; label: string }[]; heads: { id: string; name: string; special: boolean }[] } | null) ?? { students: [], classes: [], sections: [], heads: [] };
   const today = todayIst();
-  const byStudent = new Map<string, StudentDues>();
-  for (const d of dueRows.map((r) => toDueRow(r, heads, special))) {
-    if (d.balance <= 0) continue;
-    const s = st.get(d.studentId);
-    if (!s) continue;
-    const cur =
-      byStudent.get(d.studentId) ??
-      ({
-        studentId: d.studentId,
-        name: s.name,
-        adm: s.adm,
-        classId: s.classId,
-        sectionId: s.sectionId,
-        classLabel: s.classLabel,
-        classOrder: sections.find((x) => x.id === s.sectionId)?.classOrder ?? 999,
-        phone: s.phones[0] ?? null,
-        outstanding: 0,
-        overdue: 0,
-        nextDue: null,
-        dues: [],
-      } satisfies StudentDues);
-    cur.outstanding += d.balance;
-    if (d.dueDate < today) cur.overdue += d.balance;
-    if (!cur.nextDue || d.dueDate < cur.nextDue) cur.nextDue = d.dueDate;
-    cur.dues.push({ id: d.id, headId: d.headId, headName: d.headName, isSpecial: d.isSpecial, label: d.label, dueDate: d.dueDate, balance: d.balance });
-    byStudent.set(d.studentId, cur);
-  }
-  const classes = [...new Map(sections.map((s) => [s.classId, { id: s.classId, name: s.className }])).values()];
   return (
     <>
       {header}
-      <DuesTable
-        rows={[...byStudent.values()]}
-        today={today}
-        yearName={year.name}
-        classes={classes}
-        sections={sections.map((s) => ({ id: s.id, label: s.label }))}
-        heads={all.filter((h) => dueRows.some((d) => d.fee_head_id === h.id)).map((h) => ({ id: h.id, name: h.name, special: special.has(h.id) }))}
-      />
+      <DuesTable rows={page.students} today={today} yearName={year.name} classes={page.classes} sections={page.sections} heads={page.heads} />
     </>
   );
 }

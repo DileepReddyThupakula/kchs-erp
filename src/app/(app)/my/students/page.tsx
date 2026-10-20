@@ -4,8 +4,7 @@ import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
 import { EmptyState, PageHeader } from "@/components/ui/card";
-import { getMyClasses } from "@/features/my/queries";
-import { getSectionOptions, getStudentsPageClamped, studentsParamsFromUrl } from "@/features/students/queries";
+import { getStudentsPageClamped, studentsParamsFromUrl } from "@/features/students/queries";
 import { StudentsTable } from "@/app/(app)/students/students-table";
 
 export const metadata = { title: "My students" };
@@ -32,8 +31,15 @@ export default async function MyStudentsPage({ searchParams }: { searchParams: P
     );
   }
   const supabase = await createClient();
-  const [{ rows, total }, mine, allSections] = await Promise.all([getStudentsPageClamped(year.id, studentsParamsFromUrl(sp, "mine"), "mine"), getMyClasses(me, year.id), getSectionOptions(supabase, year.id)]);
-  const myIds = new Set(mine.map((m) => m.sectionId));
+  // two calls, in parallel: the student list page and the caller's own sections for the filter
+  const [{ rows, total }, { data: mine, error }] = await Promise.all([
+    getStudentsPageClamped(year.id, studentsParamsFromUrl(sp, "mine"), "mine"),
+    supabase.rpc("my_section_options", { p_year: year.id }),
+  ]);
+  if (error) throw error;
+  const sections = ((mine ?? []) as unknown as { id: string; classId: string; className: string; classOrder: number; name: string; label: string }[]).map((s) => ({
+    id: s.id, classId: s.classId, className: s.className, classOrder: s.classOrder, section: s.name, label: s.label,
+  }));
   return (
     <>
       {header}
@@ -41,7 +47,7 @@ export default async function MyStudentsPage({ searchParams }: { searchParams: P
         rows={rows}
         total={total}
         mode="mine"
-        sections={allSections.filter((s) => myIds.has(s.id))}
+        sections={sections}
         yearName={year.name}
         canEdit={can(me, "students.edit")}
       />

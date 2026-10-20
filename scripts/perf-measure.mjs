@@ -113,3 +113,11 @@ if (who === "heavy") {
   await run("Office (fees)", "fees@demo.kchs.test", [["Fees: Collect", "/fees/collect"]]);
   await run("Teacher", "teacher1@demo.kchs.test", [["Exams & marks", "/exams/marks"], ["Exam results", "/exams/results"]]);
 }
+// speed pass 2:  node --env-file=.env.local scripts/perf-measure.mjs <base> speed2
+if (who === "speed2") {
+  const common = [["Timetable", "/timetable"]];
+  await run("Admin", "admin@demo.kchs.test", [["Fees: Dues", "/fees/dues"], ["Fees: Receipts", "/fees/receipts"], ["Fee reports", "/fees/reports"], ["Fee setup", "/fees/setup"], ["Report cards", "/exams/report-cards"], ["Exams scheme", "/exams/scheme"], ["Results report", "/reports/exams"], ...common]);
+  await run("Office (fees)", "fees@demo.kchs.test", [["Fees: Dues", "/fees/dues"], ["Fees: Receipts", "/fees/receipts"], ["Fee reports", "/fees/reports"], ["Fee setup", "/fees/setup"]]);
+  await run("Office (desk)", "desk@demo.kchs.test", [["Timetable", "/timetable"], ["Report cards", "/exams/report-cards"]]);
+  await run("Teacher", "teacher1@demo.kchs.test", [["My students", "/my/students"], ["Report cards", "/exams/report-cards"], ["Exams scheme", "/exams/scheme"], ["Results report", "/reports/exams"], ...common, ["My timetable", "/my/timetable"]]);
+}

@@ -4,7 +4,7 @@ import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
 import { PageHeader } from "@/components/ui/card";
-import { getReceipts, getStudentLookup } from "@/features/fees/queries";
+import type { ReceiptRow } from "@/features/fees/queries";
 import { todayIst } from "@/features/fees/shared";
 import { RangeForm } from "@/components/fees/range-form";
 import { ReceiptsTable } from "./table";
@@ -18,9 +18,9 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: Pro
   const supabase = await createClient();
   const from = /^\d{4}-\d{2}-\d{2}$/.test(sp.from ?? "") ? sp.from! : (year?.start_date ?? todayIst());
   const to = /^\d{4}-\d{2}-\d{2}$/.test(sp.to ?? "") ? sp.to! : todayIst();
-  const lookup = year ? await getStudentLookup(supabase, year.id) : [];
-  const rows = await getReceipts(supabase, { from, to, lookup: new Map(lookup.map((s) => [s.id, s])) });
-  const { data: classes } = await supabase.from("classes").select("id, name, sort_order").order("sort_order");
+  // ONE database call: the receipts of the range with their fee heads, the student's class and who collected, and the class list
+  const { data } = year ? await supabase.rpc("fees_receipts_page", { p_year: year.id, p_from: from, p_to: to }) : { data: null };
+  const page = (data as unknown as { rows: ReceiptRow[]; classes: { id: string; name: string }[] } | null) ?? { rows: [], classes: [] };
   return (
     <>
       <PageHeader
@@ -30,7 +30,7 @@ export default async function ReceiptsPage({ searchParams }: { searchParams: Pro
         description="Every receipt, including cancelled ones (their numbers stay visible). Reprints are marked “Duplicate copy”."
         filters={<RangeForm from={from} to={to} />}
       />
-      <ReceiptsTable rows={rows} canCancel={can(me, "fees.cancelReceipt")} classes={(classes ?? []).map((c) => ({ id: c.id, name: c.name }))} rangeLabel={`${from}_to_${to}`} />
+      <ReceiptsTable rows={page.rows} canCancel={can(me, "fees.cancelReceipt")} classes={page.classes} rangeLabel={`${from}_to_${to}`} />
     </>
   );
 }

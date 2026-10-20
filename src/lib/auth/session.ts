@@ -3,6 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { can, type AppRole, type Capability, type Duty } from "./permissions";
+import type { AcademicYear } from "@/types/database";
 
 export type CurrentStaff = {
   userId: string;
@@ -14,6 +15,21 @@ export type CurrentStaff = {
   duties: Duty[];
 };
 
+/**
+ * Who am I, my duties and the academic years: ONE database call per page (it used to be three). The database applies the same rules as before:
+ * a person sees only their own active staff row; a deactivated or removed person gets nothing.
+ */
+export type SessionContext = {
+  staff: { id: string; full_name: string; app_role: AppRole | null; status: string } | null;
+  duties: Duty[];
+  years: AcademicYear[];
+};
+export const getSessionContext = cache(async (): Promise<SessionContext | null> => {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("session_context");
+  return (data as unknown as SessionContext | null) ?? null;
+});
+
 /** The signed-in staff member, or null if not signed in / no active role. */
 export const getCurrentStaff = cache(async (): Promise<CurrentStaff | null> => {
   const supabase = await createClient();
@@ -23,11 +39,8 @@ export const getCurrentStaff = cache(async (): Promise<CurrentStaff | null> => {
   if (!claims?.sub) return null;
   const userId = claims.sub;
 
-  // the staff row and the duties are independent: ask for both at once
-  const [{ data: staff }, { data: duties }] = await Promise.all([
-    supabase.from("staff").select("id, full_name, app_role, status").eq("user_id", userId).maybeSingle(),
-    supabase.rpc("my_duties"),
-  ]);
+  const ctx = await getSessionContext();
+  const staff = ctx?.staff;
   if (!staff || staff.status !== "active" || !staff.app_role) return null;
 
   return {
@@ -36,10 +49,9 @@ export const getCurrentStaff = cache(async (): Promise<CurrentStaff | null> => {
     staffId: staff.id,
     fullName: staff.full_name,
     role: staff.app_role,
-    duties: (duties ?? []) as Duty[],
+    duties: ctx.duties ?? [],
   };
 });
-
 export async function requireStaff(): Promise<CurrentStaff> {
   const me = await getCurrentStaff();
   if (!me) redirect("/login?error=no-access");

@@ -7,7 +7,7 @@ import { LinkTabs } from "@/components/ui/tabs";
 import { ParamSelect } from "@/components/ui/param-select";
 import { YearPicker } from "@/components/ui/year-picker";
 import { AlsoSee, ReportBody } from "@/components/reports/page-parts";
-import { getExamNames, getReport, paramsFromUrl } from "@/features/reports/queries";
+import { getReport, paramsFromUrl } from "@/features/reports/queries";
 import { todayIst } from "@/features/fees/shared";
 
 export const metadata = { title: "Results summary" };
@@ -27,11 +27,16 @@ export default async function ExamReports({ searchParams }: { searchParams: Prom
   );
   if (!year) return <>{header}<EmptyState title="No academic year yet">Set up the academic year first.</EmptyState></>;
   const supabase = await createClient();
-  const names = await getExamNames(supabase, year.id);
-  const exam = names.includes(sp.exam ?? "") ? sp.exam! : names[0];
-  const tab = sp.tab === "sections" ? "exam-class" : "exam-subject";
-  const res = await getReport(supabase, tab, { yearId: year.id, yearName: year.name, exam, today: todayIst() });
-  const sectionsOk = !("forbidden" in (await getReport(supabase, "exam-class", { yearId: year.id, yearName: year.name, exam, today: todayIst() })));
+  // ONE database call: the result names, whether the sections tab is open to this person, and the rows of the tab shown
+  const tabWanted = sp.tab === "sections" ? "sections" : "subjects";
+  const { data: pg, error } = await supabase.rpc("report_exams_page", { p_year: year.id, p_exam: sp.exam || undefined, p_tab: tabWanted });
+  if (error) throw error;
+  const page = pg as unknown as { names: string[]; exam: string | null; sectionsOk: boolean; rows: Record<string, unknown>[]; forbidden?: boolean };
+  const names = page.names;
+  const exam = page.exam ?? undefined;
+  const tab = tabWanted === "sections" ? "exam-class" : "exam-subject";
+  const sectionsOk = page.sectionsOk;
+  const res = await getReport(supabase, tab, { yearId: year.id, yearName: year.name, exam, today: todayIst(), examPage: { rows: page.rows, forbidden: page.forbidden } });
   const query = new URLSearchParams({ year: year.id, ...(exam ? { exam } : {}) }).toString();
   return (
     <>

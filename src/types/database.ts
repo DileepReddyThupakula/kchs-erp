@@ -752,6 +752,11 @@ export type Database = {
       collect_page: { Args: { p_year: string; p_today: string }; Returns: Json };
       marks_page: { Args: { p_year: string; p_section?: string; p_component?: string; p_subject?: string }; Returns: Json };
       results_page: { Args: { p_year: string; p_section?: string; p_group?: string }; Returns: Json };
+      report_cards_page: { Args: { p_year: string; p_section?: string; p_group?: string }; Returns: Json };
+      exams_scheme_page: { Args: { p_year: string; p_class?: string }; Returns: Json };
+      report_exams_page: { Args: { p_year: string; p_exam?: string; p_tab?: string }; Returns: Json };
+      timetable_page: { Args: { p_year: string }; Returns: Json };
+      my_section_options: { Args: { p_year: string }; Returns: Json };
       audit_entries: { Args: { p_from?: string; p_to?: string; p_actor?: string; p_group?: string; p_table?: string; p_record?: string; p_search?: string; p_limit?: number; p_offset?: number; p_alert?: string }; Returns: Json };
       audit_record_history: { Args: { p_table: string; p_record: string; p_limit?: number }; Returns: Json };
       audit_actors: { Args: Record<string, never>; Returns: Json };
@@ -786,6 +791,10 @@ export type Database = {
       id_card_sections: { Args: Record<string, never>; Returns: Json };
       id_card_candidates: { Args: { p_section?: string; p_class?: string }; Returns: Json };
       id_card_issue: { Args: { p_students: string[]; p_overrides?: Json }; Returns: Json };
+      session_context: { Args: Record<string, never>; Returns: Json };
+      fees_dues_page: { Args: { p_year: string; p_today: string }; Returns: Json };
+      fees_receipts_page: { Args: { p_year: string; p_from: string; p_to: string }; Returns: Json };
+      fees_setup_page: { Args: { p_year: string }; Returns: Json };
       id_card_preview: { Args: { p_students: string[] }; Returns: Json };
       id_card_print_data: { Args: { p_cards: string[] }; Returns: Json };
       id_card_print: { Args: { p_cards: string[] }; Returns: Json };

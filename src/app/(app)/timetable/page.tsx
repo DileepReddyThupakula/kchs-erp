@@ -7,7 +7,7 @@ import { ParamSelect } from "@/components/ui/param-select";
 import { YearPicker } from "@/components/ui/year-picker";
 import { TimetableTabs } from "@/components/timetable/nav";
 import { ClassEditor } from "@/components/timetable/class-editor";
-import { getAssignments, getBellData, getEntries, getSectionsInfo, getSubjectNames, getTeachers, getWorkingDays } from "@/features/timetable/queries";
+import { getTimetablePage } from "@/features/timetable/queries";
 
 export const metadata = { title: "Class timetable" };
 
@@ -32,15 +32,8 @@ export default async function ClassTimetablePage({ searchParams }: { searchParam
   );
   if (!year) return <>{header()}<EmptyState title="No academic year yet">Create an academic year first.</EmptyState></>;
 
-  const [bell, sections, entries, assignments, teachers, subjects, working] = await Promise.all([
-    getBellData(supabase),
-    getSectionsInfo(supabase, year.id),
-    getEntries(supabase, year.id),
-    getAssignments(supabase),
-    getTeachers(supabase),
-    getSubjectNames(supabase),
-    getWorkingDays(supabase),
-  ]);
+  // ONE database call for everything the editor needs
+  const { bell, sections, entries, assignments, teachers, subjects, working } = await getTimetablePage(supabase, year.id);
   if (!sections.length) return <>{header()}<TimetableTabs current="class" /><EmptyState title="No sections yet">Add classes and sections under School setup.</EmptyState></>;
   const section = sections.find((s) => s.id === sp.section) ?? sections[0];
   const teacherNames = Object.fromEntries(teachers.map((t) => [t.id, t.name]));

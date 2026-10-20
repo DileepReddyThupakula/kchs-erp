@@ -4,7 +4,9 @@ import { formatDate } from "@/lib/utils";
 import type { ReportData, ReportId } from "./shared";
 
 type Supa = Awaited<ReturnType<typeof createClient>>;
-export type ReportParams = { yearId: string; yearName: string; from?: string; to?: string; upto?: string; exam?: string; today: string };
+export type ReportParams = { yearId: string; yearName: string; from?: string; to?: string; upto?: string; exam?: string; today: string;
+  /** The rows the one-call page function already fetched for the exam reports; otherwise they are fetched here. */
+  examPage?: { rows: Record<string, unknown>[]; forbidden?: boolean } };
 
 /** The result of asking for a report: the data, or "not allowed" (the database refused). */
 export type ReportResult = { data: ReportData } | { forbidden: true } | { error: string };
@@ -112,12 +114,25 @@ export async function getReport(supabase: Supa, id: ReportId, p: ReportParams): 
     case "exam-subject": {
       const exam = p.exam;
       if (!exam) return { data: { id, title: id === "exam-class" ? "Results by section" : "Results by subject", subtitle: year, columns: [], rows: [], note: "No result has been set up yet." } };
-      const { data: groups } = await supabase.from("result_groups").select("id").eq("academic_year_id", p.yearId).eq("name", exam).in("kind", ["term", "final"]);
-      const ids = (groups ?? []).map((g) => g.id);
+      type ClassRow = { class_name: string; section_name: string; students: number; passed: number; failed: number; incomplete: number; avg_pct: number | string | null; grades: unknown };
+      type SubjectRow = { class_name: string; section_name: string; subject_name: string; students: number; passed: number; failed: number; incomplete: number; avg_pct: number | string | null };
+      let fetched: Record<string, unknown>[];
+      if (p.examPage) {
+        if (p.examPage.forbidden) return { forbidden: true };
+        fetched = p.examPage.rows;
+      } else {
+        const { data: groups } = await supabase.from("result_groups").select("id").eq("academic_year_id", p.yearId).eq("name", exam).in("kind", ["term", "final"]);
+        const ids = (groups ?? []).map((g) => g.id);
+        if (id === "exam-class") {
+          const all = await Promise.all(ids.map((g) => supabase.rpc("report_class_results", { p_group: g })));
+          if (all.length && all.every((r) => r.error && forbidden(r.error))) return { forbidden: true };
+          fetched = all.flatMap((r) => r.data ?? []);
+        } else {
+          fetched = (await Promise.all(ids.map((g) => supabase.rpc("report_subject_results", { p_group: g })))).flatMap((r) => r.data ?? []);
+        }
+      }
       if (id === "exam-class") {
-        const all = await Promise.all(ids.map((g) => supabase.rpc("report_class_results", { p_group: g })));
-        if (all.length && all.every((r) => r.error && forbidden(r.error))) return { forbidden: true };
-        const rows = all.flatMap((r) => r.data ?? []);
+        const rows = fetched as unknown as ClassRow[];
         return {
           data: {
             id, title: `Results by section: ${exam}`, subtitle: year,
@@ -133,8 +148,7 @@ export async function getReport(supabase: Supa, id: ReportId, p: ReportParams): 
           },
         };
       }
-      const all = await Promise.all(ids.map((g) => supabase.rpc("report_subject_results", { p_group: g })));
-      const rows = all.flatMap((r) => r.data ?? []);
+      const rows = fetched as unknown as SubjectRow[];
       return {
         data: {
           id, title: `Results by subject: ${exam}`, subtitle: year,

@@ -119,3 +119,22 @@ export type ResultsPage = {
   results?: PageResult[];
   totals?: { student_id: string; scored: number | string; max_marks: number | string; pct: number | string; grade: string | null; grade_point: number | string | null; result: "pass" | "fail" | "incomplete" }[];
 };
+
+export type ReportCardsPage = {
+  all: boolean;
+  sections: SectionOpt[];
+  section?: SectionOpt;
+  groups?: SchemeJson["groups"];
+  group?: SchemeJson["groups"][number];
+  rows?: { student_id: string; full_name: string; roll_no: number | null; scored: number | string | null; max_marks: number | string | null; pct: number | string | null; grade: string | null; result: string | null; printed: number }[];
+  sample?: { marked_sessions: number | string; unmarked_sessions: number | string } | null;
+};
+export type SchemePage = {
+  classes: { id: string; name: string; sort_order: number }[];
+  class_id: string | null;
+  scheme: SchemeJson | null;
+  bands: { grade: string; min_pct: number | string; max_pct: number | string; grade_point: number | string; is_fail: boolean }[];
+  grades: { code: string; label: string }[];
+  bank: { id: string; text_en: string; text_te: string | null; te_verified: boolean }[];
+  default_pass_percent: number | string | null;
+};

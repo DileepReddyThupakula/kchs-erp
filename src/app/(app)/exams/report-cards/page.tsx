@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { Printer } from "lucide-react";
 import { requirePage } from "@/features/students/page-guard";
-import { can } from "@/lib/auth/permissions";
 import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
 import { Badge, EmptyState } from "@/components/ui/card";
 import { buttonClasses } from "@/components/ui/button-classes";
 import { ParamSelect } from "@/components/ui/param-select";
-import { getExamSections, getScheme, pickSection } from "@/features/exams/queries";
+import type { ReportCardsPage } from "@/features/exams/queries";
 import { fmtNum, fmtPct, RESULT_TEXT, unmarkedWarning } from "@/features/exams/shared";
 import { AttendanceWarning } from "@/components/exams/attendance-warning";
 
@@ -15,24 +14,22 @@ export const metadata = { title: "Report cards" };
 
 export default async function ReportCardsPage({ searchParams }: { searchParams: Promise<{ section?: string; group?: string }> }) {
   const sp = await searchParams;
-  const me = await requirePage("/exams/report-cards");
+  await requirePage("/exams/report-cards");
   const supabase = await createClient();
-  const all = can(me, "marks.enterAll");
   const year = await resolveYear();
   if (!year) return <EmptyState title="No academic year yet">Set up the academic year first.</EmptyState>;
-  const sections = (await getExamSections(supabase, me, year.id)).filter((s) => all || s.classTeacherId === me.staffId);
-  if (!sections.length) return <EmptyState title="No report cards for you">Report cards are printed by Admin, the marks duty, and the class teacher of each section.</EmptyState>;
-  const section = await pickSection(supabase, sections, year.id, sp.section);
-  const scheme = await getScheme(supabase, year.id, section.classId);
-  const groups = scheme.groups.filter((g) => g.kind === "term" || g.kind === "final");
-  if (!groups.length) return <EmptyState title="No terms set up for this class">The Admin sets up the terms on the Scheme tab.</EmptyState>;
-  const group = groups.find((g) => g.id === sp.group) ?? groups[0];
-  const { data: list, error } = await supabase.rpc("class_result_list", { p_section: section.id, p_group: group.id });
-  const rows = list ?? [];
-  // before printing: are too many attendance sessions of this period unmarked? (every student of a section shares the same sessions)
-  const from = group.start_date ?? year.start_date;
-  const to = group.end_date ?? year.end_date;
-  const sample = group.locked_at && rows[0] && from && to ? (await supabase.rpc("student_day_totals", { p_student: rows[0].student_id, p_from: from, p_to: to })).data?.[0] : null;
+  // ONE database call: the sections this person may print, the terms of the class, the result list and the attendance sample
+  const { data, error } = await supabase.rpc("report_cards_page", { p_year: year.id, p_section: sp.section || undefined, p_group: sp.group || undefined });
+  if (error) throw error;
+  const page = data as unknown as ReportCardsPage;
+  const sections = page.sections;
+  if (!sections.length || !page.section) return <EmptyState title="No report cards for you">Report cards are printed by Admin, the marks duty, and the class teacher of each section.</EmptyState>;
+  const section = page.section;
+  const groups = page.groups ?? [];
+  if (!groups.length || !page.group) return <EmptyState title="No terms set up for this class">The Admin sets up the terms on the Scheme tab.</EmptyState>;
+  const group = page.group;
+  const rows = page.rows ?? [];
+  const sample = page.sample;
   const warn = sample ? unmarkedWarning(Number(sample.marked_sessions), Number(sample.unmarked_sessions)) : null;
   return (
     <div className="space-y-3">
@@ -47,7 +44,6 @@ export default async function ReportCardsPage({ searchParams }: { searchParams: 
       </div>
       {warn && <AttendanceWarning {...warn} />}
       {!group.locked_at && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{group.name} is not locked yet, so its report cards cannot be printed. Admin locks it on the Locks tab once every mark is entered.</p>}
-      {error && <p className="text-sm text-red-700">{error.message}</p>}
       <div className="overflow-x-auto rounded-lg border border-border bg-surface">
         <table className="w-full min-w-[36rem] text-left text-sm">
           <thead className="bg-navy-50 text-xs uppercase tracking-wide text-muted">

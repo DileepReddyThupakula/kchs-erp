@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveYear } from "@/lib/settings";
 import { PageHeader } from "@/components/ui/card";
 import { RangeForm } from "@/components/fees/range-form";
-import { getReceipts, getStudentLookup } from "@/features/fees/queries";
+import type { ReceiptRow } from "@/features/fees/queries";
 import { todayIst } from "@/features/fees/shared";
 import { ReportView } from "./view";
 
@@ -19,9 +19,8 @@ export default async function FeeReportsPage({ searchParams }: { searchParams: P
   const ok = (v?: string) => /^\d{4}-\d{2}-\d{2}$/.test(v ?? "");
   const from = ok(sp.from) ? sp.from! : today;
   const to = ok(sp.to) ? sp.to! : from;
-  const lookup = year ? await getStudentLookup(supabase, year.id) : [];
-  const rows = await getReceipts(supabase, { from, to, lookup: new Map(lookup.map((s) => [s.id, s])) });
-  const { data: classes } = await supabase.from("classes").select("id, name, sort_order").order("sort_order");
+  const { data } = year ? await supabase.rpc("fees_receipts_page", { p_year: year.id, p_from: from, p_to: to }) : { data: null };
+  const page = (data as unknown as { rows: ReceiptRow[]; classes: { id: string; name: string }[] } | null) ?? { rows: [], classes: [] };
   const single = from === to;
   return (
     <>
@@ -32,7 +31,7 @@ export default async function FeeReportsPage({ searchParams }: { searchParams: P
         description="Totals by payment mode and by fee head (special fees included). Cancelled receipts are listed but not counted."
         filters={<RangeForm from={from} to={to} />}
       />
-      <ReportView rows={rows} from={from} to={to} single={single} classes={(classes ?? []).map((c) => ({ id: c.id, name: c.name }))} />
+      <ReportView rows={page.rows} from={from} to={to} single={single} classes={page.classes} />
     </>
   );
 }

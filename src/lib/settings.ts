@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { getSessionContext } from "@/lib/auth/session";
 
 export const getSchoolSettings = cache(async () => {
   const supabase = await createClient();
@@ -15,9 +16,9 @@ export function publicStorageUrl(bucket: string, path: string | null | undefined
 
 /** Current academic year, or the one picked via ?year=<id>. */
 export const getAcademicYears = cache(async () => {
-  const supabase = await createClient();
-  const { data } = await supabase.from("academic_years").select("*").order("start_date", { ascending: false });
-  return data ?? [];
+  // comes with the session call every page already makes (no separate query)
+  const ctx = await getSessionContext();
+  return ctx?.years ?? [];
 });
 
 export async function resolveYear(yearParam?: string) {
