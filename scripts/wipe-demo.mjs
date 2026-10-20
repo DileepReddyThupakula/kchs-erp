@@ -4,6 +4,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { DEMO_CODE_PREFIX, DEMO_EMAIL_DOMAIN } from "./demo-data.mjs";
 import { wipeDemoStudents } from "./demo-students.mjs";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("wipe-demo.mjs");
 
 const { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key } = process.env;
 if (!url || !key) {

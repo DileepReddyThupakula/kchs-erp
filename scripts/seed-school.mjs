@@ -3,6 +3,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("seed-school.mjs");
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is not set (add it to .env.local)");

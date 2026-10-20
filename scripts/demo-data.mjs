@@ -1,6 +1,8 @@
 // DUMMY data only. Names and phone numbers are invented.
 // Every demo row is marked so `seed:wipe` can remove exactly these rows:
 //   staff.employee_code starts with DEMO-   |   login emails end with @demo.kchs.test
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("demo-data.mjs");
 export const DEMO_EMAIL_DOMAIN = "demo.kchs.test";
 export const DEMO_CODE_PREFIX = "DEMO-";
 

@@ -5,6 +5,8 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("test-db.mjs");
 
 const dir = join(import.meta.dirname, "..", "tests", "db");
 const filter = process.argv[2] ?? "";

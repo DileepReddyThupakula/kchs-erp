@@ -7,6 +7,7 @@ import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { config, dbEnv, decrypt, die, readTar, requireOpenssl } from "./lib.mjs";
 import { readDbBackup, restoreDb } from "./restore-lib.mjs";
+import { DEV_REFS, PROD_REFS, targetRefs } from "../lib/prod-guard.mjs";
 
 requireOpenssl();
 const [mode, ...rest] = process.argv.slice(2);
@@ -22,6 +23,11 @@ if (mode === "db") {
   const target = flag("--target");
   if (!target) die("Add  --target \"<connection string of the NEW database>\"");
   const env = dbEnv(target);
+  // fail closed: I must be able to tell which project this is, and development / production need an explicit flag
+  const t = targetRefs({ DATABASE_URL: target });
+  if (t.unknown || t.refs.length !== 1) die("I cannot tell which project that connection string points at, so I will not restore into it.");
+  if (DEV_REFS.includes(t.refs[0]) && !rest.includes("--allow-live")) die("That is the DEVELOPMENT project. Add --allow-live only if you really mean to overwrite it.");
+  if (PROD_REFS.includes(t.refs[0]) && !rest.includes("--production-target")) die("That is the PRODUCTION project. Add --production-target only for a real recovery (docs/BACKUP.md).");
   const live = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL).hostname : "";
   if (env.PGHOST === live && !rest.includes("--allow-live")) die("That is the LIVE database. A restore overwrites what is there. Restore into a NEW project, or add --allow-live if you are sure (docs/BACKUP.md, 'If data is lost').");
   if ((await ask(`Restore ${file}\ninto ${env.PGHOST}? Type RESTORE to continue: `)) !== "RESTORE") die("Cancelled. Nothing was changed.");
@@ -33,6 +39,10 @@ if (mode === "db") {
   console.log("\nThen: check the counts with the restore drill steps in docs/BACKUP.md, upload the files (npm run restore:files), and re-do the dashboard settings listed there.");
 } else {
   const url = process.env.TARGET_SUPABASE_URL, key = process.env.TARGET_SERVICE_KEY;
+  const tr = targetRefs({ NEXT_PUBLIC_SUPABASE_URL: url });
+  if (!url || tr.unknown || tr.refs.length !== 1) die("I cannot tell which project TARGET_SUPABASE_URL points at.");
+  if (DEV_REFS.includes(tr.refs[0]) && !flag("--prefix")) die("That is the DEVELOPMENT project: only a test upload into temporary buckets (--prefix) is allowed there.");
+  if (PROD_REFS.includes(tr.refs[0]) && !rest.includes("--production-target")) die("That is the PRODUCTION project. Add --production-target only for a real recovery.");
   if (!url || !key) die("Set TARGET_SUPABASE_URL and TARGET_SERVICE_KEY (of the NEW project) in the Terminal first. See docs/BACKUP.md.");
   const prefix = flag("--prefix") ?? "";          // for tests only: upload into buckets named <prefix><bucket>
   const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });

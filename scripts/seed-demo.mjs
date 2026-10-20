@@ -9,6 +9,8 @@ import { seedDemoFees } from "./demo-fees.mjs";
 import { seedDemoTimetable } from "./demo-timetable.mjs";
 import { seedDemoAttendance } from "./demo-attendance.mjs";
 import { seedDemoNotices } from "./demo-notices.mjs";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("seed-demo.mjs");
 
 const { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key, DEMO_USER_PASSWORD: password } = process.env;
 for (const [k, v] of Object.entries({ NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key, DEMO_USER_PASSWORD: password })) {

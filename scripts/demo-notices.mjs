@@ -9,6 +9,8 @@
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import pg from "pg";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("demo-notices.mjs");
 
 const HOMEWORK = {
   TEL: ["Telugu: read lesson 5 aloud and write the meanings of 10 words.", "Telugu: copy the poem on page 32 neatly.", "Telugu: answer questions 1 to 4 at the end of the lesson."],

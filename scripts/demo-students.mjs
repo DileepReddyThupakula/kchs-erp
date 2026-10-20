@@ -8,6 +8,8 @@
 import pg from "pg";
 import { createClient } from "@supabase/supabase-js";
 import { wipeDemoFees } from "./demo-fees.mjs";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("demo-students.mjs");
 
 const SURNAMES = [
   "Gandluri", "Pasupuleti", "Kommu", "Bandi", "Chinthala", "Dasari", "Gangireddy", "Kalluri", "Mandla", "Nallapu",

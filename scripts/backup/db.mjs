@@ -3,8 +3,10 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import pg from "pg";
+import { useTarget } from "../lib/prod-guard.mjs";
 import { config, dbEnv, die, EncryptedFile, loadEnvHint, mb, requireOpenssl, requirePublicKey, rotate, stamp } from "./lib.mjs";
 
+await useTarget("backup:db", { confirm: false });   // development unless you add --production on purpose
 const cfg = config();
 loadEnvHint();
 requireOpenssl();

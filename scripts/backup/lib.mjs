@@ -16,7 +16,8 @@ export const DEFAULT_KEYS = path.join(HOME, "KCHS-Backup-Keys");
 
 export function config() {
   return {
-    dir: process.env.BACKUP_DIR || DEFAULT_DIR,
+    // production backups never mix with development ones: they go in a "production" sub-folder
+    dir: path.join(process.env.BACKUP_DIR || DEFAULT_DIR, process.argv.includes("--production") ? "production" : ""),
     keep: Math.max(1, Number(process.env.BACKUP_KEEP || 8)),
     publicKey: process.env.BACKUP_PUBLIC_KEY || path.join(DEFAULT_KEYS, "public-key.pem"),
     privateKey: process.env.BACKUP_PRIVATE_KEY || "",

@@ -8,6 +8,8 @@
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import pg from "pg";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("demo-attendance.mjs");
 
 function rng(seed) {
   let a = seed >>> 0;

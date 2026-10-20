@@ -7,6 +7,8 @@
 //   npm run wipe:demo-fees -- --yes   (removes ONLY demo fee data)
 // Needs DATABASE_URL.
 import pg from "pg";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("demo-fees.mjs");
 
 const MODES = [
   ["cash", null],

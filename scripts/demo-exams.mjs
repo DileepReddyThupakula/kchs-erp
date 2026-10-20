@@ -8,6 +8,8 @@
 import { pathToFileURL } from "node:url";
 import { readFileSync } from "node:fs";
 import pg from "pg";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("demo-exams.mjs");
 
 const CLASSES = ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"];
 const EXTRA_PER_SECTION = 10; // dummy students added so the marks and report cards look realistic (all is_demo, admission no DEMO-EX-...)

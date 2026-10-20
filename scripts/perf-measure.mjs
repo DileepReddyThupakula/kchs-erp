@@ -5,6 +5,8 @@
 //   node --env-file=.env.local scripts/perf-measure.mjs [baseUrl] [admin|teacher|both] [logFile]
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "node:fs";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("perf-measure.mjs");
 
 const base = process.argv[2] ?? "http://localhost:3200";
 const who = process.argv[3] ?? "both";

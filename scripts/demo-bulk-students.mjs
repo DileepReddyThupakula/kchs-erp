@@ -4,6 +4,8 @@
 //   npm run wipe:demo-bulk -- --yes       (removes ONLY the DEMO-BULK students and their guardians)
 import pg from "pg";
 import { pathToFileURL } from "node:url";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("demo-bulk-students.mjs");
 
 const STRENGTH = { Nursery: 46, LKG: 36, UKG: 30, "Class 1": 32, "Class 2": 31, "Class 3": 28, "Class 4": 23, "Class 5": 16, "Class 6": 37, "Class 7": 46, "Class 8": 37, "Class 9": 40, "Class 10": 37 };
 const SURNAMES = ["Gandluri", "Pasupuleti", "Kommu", "Bandi", "Chinthala", "Dasari", "Gangireddy", "Kalluri", "Mandla", "Nallapu", "Obulreddy", "Pothula", "Ramireddy", "Sanapala", "Talari", "Vemula", "Gajjala", "Kuruva", "Madduri", "Shaik", "Syed", "Seelam", "Boya", "Vanga", "Yeduguri", "Mekala", "Lingala"];

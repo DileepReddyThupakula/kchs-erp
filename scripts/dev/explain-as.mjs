@@ -1,4 +1,6 @@
 import pg from "pg";
+import { assertDevOnly } from "../lib/prod-guard.mjs";
+assertDevOnly("explain-as.mjs");
 const c = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await c.connect();
 const who = process.argv[2];

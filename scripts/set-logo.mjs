@@ -5,6 +5,8 @@
 import { readFileSync } from "node:fs";
 import { extname } from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("set-logo.mjs");
 
 const [file, motto] = process.argv.slice(2);
 const { NEXT_PUBLIC_SUPABASE_URL: url, SUPABASE_SERVICE_ROLE_KEY: key } = process.env;

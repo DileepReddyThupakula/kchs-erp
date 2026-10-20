@@ -1,6 +1,8 @@
 // Row counts + md5 per exam table, for proving a manual test left the data as it was:
 //   node --env-file=.env.local scripts/dev/exam-snapshot.mjs > before.json   (then again -> after.json; diff)
 import pg from "pg";
+import { assertDevOnly } from "../lib/prod-guard.mjs";
+assertDevOnly("exam-snapshot.mjs");
 const t = ["exam_components", "exam_subject_max", "result_groups", "result_group_members", "subject_pass_marks", "marks", "subject_results", "student_results", "grade_entries", "grade_bands", "descriptive_grades", "remark_bank", "report_remarks", "report_card_prints", "exam_class_modes"];
 const c = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await c.connect();

@@ -1,6 +1,8 @@
 // After a browser session or a test run: lists anything that differs from the plain demo data. Read-only.
 //   node --env-file=.env.local scripts/dev/check-demo-clean.mjs
 import pg from "pg";
+import { useTarget } from "../lib/prod-guard.mjs";
+await useTarget("check-demo-clean", { confirm: false });   // read-only; add --production to look at production
 const c = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 await c.connect();
 const q = async (title, sql) => { const r = (await c.query(sql)).rows; console.log(`${r.length ? "CHECK" : "ok   "}  ${title}${r.length ? ": " + JSON.stringify(r) : ""}`); };

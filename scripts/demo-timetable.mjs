@@ -8,6 +8,8 @@
 // Needs DATABASE_URL. Uses the default bell schedule (8 periods, Mon-Sat).
 import { pathToFileURL } from "node:url";
 import pg from "pg";
+import { assertDevOnly } from "./lib/prod-guard.mjs";
+assertDevOnly("demo-timetable.mjs");
 
 // weekly periods per subject code, by class band (demo values)
 const PRE = { TEL: 6, ENG: 6, MAT: 6, GA: 4, RHY: 4, DRW: 4, ACE: 2, WCE: 2, PHE: 3, VELS: 2 };

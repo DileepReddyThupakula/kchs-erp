@@ -4,8 +4,10 @@ import path from "node:path";
 import crypto from "node:crypto";
 import pg from "pg";
 import { createClient } from "@supabase/supabase-js";
+import { useTarget } from "../lib/prod-guard.mjs";
 import { config, die, EncryptedFile, loadEnvHint, mb, requireOpenssl, requirePublicKey, rotate, stamp } from "./lib.mjs";
 
+await useTarget("backup:files", { confirm: false });
 const cfg = config();
 loadEnvHint();
 requireOpenssl();
