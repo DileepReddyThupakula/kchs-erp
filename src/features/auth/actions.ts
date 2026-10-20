@@ -5,30 +5,43 @@ import { headers } from "next/headers";
 import { isIP } from "node:net";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loginKey, loginLabel, parseLoginId } from "@/lib/auth/login-id.mjs";
 import type { ActionState } from "@/lib/utils";
 import { passwordSchema } from "@/features/staff/password";
 import { MUST_CHANGE_KEY } from "@/lib/auth/force-change";
 
+const GENERIC = "Incorrect login ID or password.";
 const schema = z.object({
-  email: z.string().trim().email("Enter a valid email"),
-  password: z.string().min(1, "Enter your password"),
+  login: z.string().trim().min(1, "Enter your mobile number, username or email").max(120),
+  password: z.string().min(1, "Enter your password").max(200),
 });
 
 export async function signIn(_: ActionState, formData: FormData): Promise<ActionState> {
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
 
+  // The hidden login address is worked out by a fixed rule (no lookup), so a wrong ID and a wrong password look exactly the same.
+  const id = parseLoginId(parsed.data.login);
+  if (!id.ok) return { error: GENERIC };
+  const key = loginKey(id, process.env.LOGIN_KEY_SECRET);
+  const admin = createAdminClient();
+
+  // 10 failures in 15 minutes lock this login ID for the rest of that window: the password is not even tried, and the message is the same.
+  const { data: locked } = await admin.rpc("login_is_locked", { p_key: key });
+  if (locked === true) return { error: GENERIC };
+
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { error } = await supabase.auth.signInWithPassword({ email: id.authEmail, password: parsed.data.password });
   if (error) {
-    // recorded so the Admin dashboard can warn about repeated failures on one account (best effort; never blocks the sign-in screen)
-    // The log is written by the SERVER with the service key (nobody signed out can call it), together with the caller's IP and browser.
+    // recorded so the Admin dashboard can warn about repeated failures on one login ID (best effort; never blocks the sign-in screen).
+    // Written by the SERVER with the service key (nobody signed out can call it), with the caller's IP and browser, a masked label and the keyed hash.
     try {
       const h = await headers();
       const forwarded = (h.get("x-forwarded-for") ?? "").split(",")[0]?.trim() || h.get("x-real-ip")?.trim() || "";
-      await createAdminClient().rpc("log_failed_login", { p_email: parsed.data.email, p_ip: isIP(forwarded) ? forwarded : undefined, p_user_agent: h.get("user-agent") ?? undefined });
+      const { data: known } = await admin.from("staff_logins").select("id").eq("login_id", id.canonical).maybeSingle();
+      await admin.rpc("log_failed_login", { p_key: key, p_label: loginLabel(id), p_known: !!known, p_ip: isIP(forwarded) ? forwarded : undefined, p_user_agent: h.get("user-agent") ?? undefined });
     } catch { /* ignore */ }
-    return { error: "Incorrect email or password." };
+    return { error: GENERIC };
   }
 
   const { data: role } = await supabase.rpc("my_role");

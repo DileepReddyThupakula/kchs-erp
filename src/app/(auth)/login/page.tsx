@@ -27,7 +27,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <h1 className="font-display text-xl font-semibold tracking-wide text-cream-50 sm:text-2xl lg:hidden">{brand.name}</h1>
             {motto && <p className="mt-1 text-xs uppercase tracking-[0.3em] text-gold-300 lg:hidden">{motto}</p>}
             <p className="mt-3 text-lg font-semibold text-white lg:mt-0">Staff sign in</p>
-            <p className="text-sm text-navy-200">Use the email and password given by your school Admin.</p>
+            <p className="text-sm text-navy-200">Use the login ID (mobile number, username or email) and the password given by your school Admin.</p>
           </div>
           {error === "no-access" && (
             <p role="alert" className="mb-4 rounded-lg border border-red-300/40 bg-red-600/20 px-3 py-2 text-sm text-red-50">

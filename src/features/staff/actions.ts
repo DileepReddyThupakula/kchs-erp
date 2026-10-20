@@ -9,6 +9,7 @@ import { ASSIGNABLE_ROLES, DUTIES, dutiesFor, type Duty } from "@/lib/auth/permi
 import { friendlyDbError, type ActionState } from "@/lib/utils";
 import { passwordSchema } from "./password";
 import { MUST_CHANGE_KEY } from "@/lib/auth/force-change";
+import { loginLabel, parseLoginId } from "@/lib/auth/login-id.mjs";
 
 const opt = z
   .string()
@@ -74,36 +75,80 @@ export async function saveStaff(_: ActionState, fd: FormData): Promise<ActionSta
 // Computer Staff is not assignable (the database refuses it too).
 const roleSchema = z.enum(ASSIGNABLE_ROLES);
 
-/** Create an Auth login for a staff member and give it a role. Admin only. */
+const loginIdField = z.string().trim().min(1, "Enter a mobile number, a username or an email").max(120);
+
+/** Create an Auth login for a staff member and give it a role. Admin only. The login ID is an email, a 10-digit mobile number or a username. */
 export async function createLogin(_: ActionState, fd: FormData): Promise<ActionState> {
   await requireCapability("users.manage");
   const parsed = z
     .object({
       staff_id: z.string().uuid(),
-      email: z.string().trim().toLowerCase().email("Enter a valid email"),
+      login_id: loginIdField,
+      email: z.string().trim().toLowerCase().max(120).optional().or(z.literal("")),   // the real contact email (optional)
       password: passwordSchema,
       app_role: roleSchema,
     })
     .safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
-  const { staff_id, email, password, app_role } = parsed.data;
+  const { staff_id, password, app_role } = parsed.data;
+  const id = parseLoginId(parsed.data.login_id);
+  if (!id.ok) return { fieldErrors: { login_id: [id.error] } };
+  let contact: string | null = parsed.data.email || null;
+  if (contact) { const c = parseLoginId(contact); if (!c.ok || c.kind !== "email") return { fieldErrors: { email: ["Enter a real email address, or leave it empty"] } }; contact = c.canonical; }
+  if (id.kind === "email") contact = contact ?? id.canonical;
+
+  const supabase = await createClient();
+  const { data: taken } = await supabase.from("staff_logins").select("id").eq("login_id", id.canonical).maybeSingle();
+  if (taken) return { fieldErrors: { login_id: [id.kind === "mobile" ? "Another staff member already uses this number to sign in. Give this person a username instead." : "This login ID is already used by someone else."] } };
 
   const admin = createAdminClient();
-  const { data: created, error: authErr } = await admin.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { [MUST_CHANGE_KEY]: true } });
+  const { data: created, error: authErr } = await admin.auth.admin.createUser({ email: id.authEmail, password, email_confirm: true, app_metadata: { [MUST_CHANGE_KEY]: true } });
   if (authErr || !created.user) {
-    return { error: authErr?.message.includes("already") ? "A login with this email already exists." : (console.error("[auth-error]", authErr?.message), "Could not create the login. Please try again.") };
+    return { error: authErr?.message.includes("already") ? "A login with this ID already exists." : (console.error("[auth-error]", authErr?.message), "Could not create the login. Please try again.") };
   }
 
   // Link via the Admin's own session so RLS + audit log record who did it.
-  const supabase = await createClient();
-  const { error } = await supabase.from("staff").update({ user_id: created.user.id, app_role, email }).eq("id", staff_id);
+  const link = await supabase.from("staff").update({ user_id: created.user.id, app_role, ...(contact ? { email: contact } : {}) }).eq("id", staff_id);
+  const ins = link.error ? null : await supabase.from("staff_logins").upsert({ staff_id, login_id: id.canonical, kind: id.kind }, { onConflict: "staff_id" });
+  const error = link.error ?? ins?.error ?? null;
   if (error) {
     await admin.auth.admin.deleteUser(created.user.id); // roll back the orphan login
+    await supabase.from("staff").update({ user_id: null, app_role: null }).eq("id", staff_id);
     return { error: friendlyDbError(error) };
   }
-  await supabase.rpc("log_event", { p_action: "staff.login_created", p_table: "staff", p_record_id: staff_id, p_details: { role: app_role } });
+  await supabase.rpc("log_event", { p_action: "staff.login_created", p_table: "staff", p_record_id: staff_id, p_details: { role: app_role, login: loginLabel(id), kind: id.kind } });
   revalidatePath("/staff", "layout");
   return { ok: true, message: "Login created. Share the password with the staff member in person. They must choose their own password the first time they sign in." };
+}
+
+/** Change a staff member's login ID (for example a new mobile number). Same account, same password. Admin only. */
+export async function changeLoginId(_: ActionState, fd: FormData): Promise<ActionState> {
+  await requireCapability("users.manage");
+  const parsed = z.object({ staff_id: z.string().uuid(), login_id: loginIdField }).safeParse(Object.fromEntries(fd));
+  if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
+  const id = parseLoginId(parsed.data.login_id);
+  if (!id.ok) return { fieldErrors: { login_id: [id.error] } };
+  const supabase = await createClient();
+  const [{ data: staff }, { data: cur }, { data: taken }] = await Promise.all([
+    supabase.from("staff").select("user_id").eq("id", parsed.data.staff_id).single(),
+    supabase.from("staff_logins").select("login_id").eq("staff_id", parsed.data.staff_id).maybeSingle(),
+    supabase.from("staff_logins").select("staff_id").eq("login_id", id.canonical).maybeSingle(),
+  ]);
+  if (!staff?.user_id) return { error: "This staff member has no login." };
+  if (taken && taken.staff_id !== parsed.data.staff_id) return { fieldErrors: { login_id: [id.kind === "mobile" ? "Another staff member already uses this number to sign in. Give this person a username instead." : "This login ID is already used by someone else."] } };
+  if (cur?.login_id === id.canonical) return { ok: true, message: "That is already the login ID." };
+  const admin = createAdminClient();
+  const before = cur ? parseLoginId(cur.login_id) : null;
+  const { error: authErr } = await admin.auth.admin.updateUserById(staff.user_id, { email: id.authEmail, email_confirm: true });
+  if (authErr) { console.error("[auth-error]", authErr.message); return { error: "Could not change the login ID. Please try again." }; }
+  const { error } = await supabase.from("staff_logins").upsert({ staff_id: parsed.data.staff_id, login_id: id.canonical, kind: id.kind }, { onConflict: "staff_id" });
+  if (error) {
+    if (before?.ok) await admin.auth.admin.updateUserById(staff.user_id, { email: before.authEmail, email_confirm: true });   // put the old one back
+    return { error: friendlyDbError(error) };
+  }
+  await supabase.rpc("log_event", { p_action: "staff.login_id_changed", p_table: "staff", p_record_id: parsed.data.staff_id, p_details: { from: before?.ok ? loginLabel(before) : "none", to: loginLabel(id) } });
+  revalidatePath("/staff", "layout");
+  return { ok: true, message: "Login ID changed. The password stays the same." };
 }
 
 export async function changeRole(_: ActionState, fd: FormData): Promise<ActionState> {

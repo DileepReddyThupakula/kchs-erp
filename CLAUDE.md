@@ -6,7 +6,7 @@ Krishna Chaitanya High School ERP (Next.js 15 PWA + Supabase dev project `kchs-e
 1. **Save usage.** Keep reports short: results, anything wrong, what the owner must check. Do not repeat what the files already say.
 2. **Questions for a new module go in ONE message**, each with 2-3 options explained simply and a recommended choice marked. Never one at a time.
 3. **Tests:** run the full suite once per stage, on the Saturday clock only: `TEST_TODAY=2026-10-17 npm test`. Run the Sunday (`2026-10-18`) and Monday (`2026-10-19`) clocks only when the owner says it is a release check.
-4. **Before every report:** a production build (`npx next build`) and the secret scan. **After any browser session:** `node --env-file=.env.local scripts/dev/check-demo-clean.mjs`.
+4. **Before every report:** a production build (`npm run build`: it refuses to run if a `.env.production*` file exists, because Next.js would load it and aim the build at the wrong project; the production settings file is `.env.kchs-production`) and the secret scan. **After any browser session:** `node --env-file=.env.local scripts/dev/check-demo-clean.mjs`.
 5. **Browser-test only the roles affected by the change,** with temporary data that is removed afterwards (temporary duties, cards, certificates, years). Front the browser tab before clicking. Stop servers and delete helper scripts when done.
 6. **If a command or test fails or hangs, make at most two more attempts,** use bounded commands (timeouts, `tail`, `head`), then stop and tell the owner what you found.
 7. **`DECISIONS.md` is the source of truth.** Read it at the start of a session instead of re-deriving decisions. Record new decisions there in one commit.

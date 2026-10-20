@@ -23,22 +23,24 @@ export function LoginForm() {
       }}
     >
       <div className="space-y-1.5">
-        <label htmlFor="email" className="text-sm font-medium text-cream-100">
-          Email
+        <label htmlFor="login" className="text-sm font-medium text-cream-100">
+          Mobile number, username or email
         </label>
         <IconInput
-          id="email"
-          name="email"
-          type="email"
+          id="login"
+          name="login"
+          type="text"
           autoComplete="username"
-          inputMode="email"
-          placeholder="name@school"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="98765 43210, or your username"
           required
           icon={<Mail />}
           className={glassInput}
-          aria-invalid={!!state.fieldErrors?.email}
+          aria-invalid={!!state.fieldErrors?.login}
         />
-        {state.fieldErrors?.email && <p className="text-xs text-red-200">{state.fieldErrors.email[0]}</p>}
+        {state.fieldErrors?.login && <p className="text-xs text-red-200">{state.fieldErrors.login[0]}</p>}
       </div>
       <div className="space-y-1.5">
         <label htmlFor="password" className="text-sm font-medium text-cream-100">

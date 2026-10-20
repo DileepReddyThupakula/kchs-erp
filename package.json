@@ -38,7 +38,10 @@
     "restore:db": "node --env-file-if-exists=.env.local scripts/backup/restore.mjs db",
     "restore:files": "node --env-file-if-exists=.env.local scripts/backup/restore.mjs files",
     "restore:check": "node --env-file-if-exists=.env.local scripts/backup/restore-check.mjs",
-    "scan:secrets": "node scripts/dev/secret-scan.mjs"
+    "scan:secrets": "node scripts/dev/secret-scan.mjs",
+    "reset-admin-password": "node --env-file-if-exists=.env.local scripts/reset-admin-password.mjs",
+    "prebuild": "node scripts/dev/no-prod-env.mjs",
+    "prestart": "node scripts/dev/no-prod-env.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

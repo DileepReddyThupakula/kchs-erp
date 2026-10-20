@@ -58,11 +58,11 @@ export default async function run({ ok, skip }) {
   ok(still?.action === one.action, "the entry is unchanged after all those attempts");
 
   // failed sign-in report: only the app server (service key) may write it; nobody signed out or signed in can call it directly
-  const f = await ANON.rpc("log_failed_login", { p_email: "api-test-nobody@demo.kchs.test", p_ip: "10.7.7.7" });
+  const f = await ANON.rpc("log_failed_login", { p_key: "0123456789abcdef0123456789abcdef", p_label: "api-test-nobody@demo.kchs.test", p_known: false, p_ip: "10.7.7.7" });
   ok(!!f.error, "not signed in: cannot call the failed sign-in log directly");
-  const fa = await A.rpc("log_failed_login", { p_email: "api-test-nobody@demo.kchs.test", p_ip: "10.7.7.7" });
+  const fa = await A.rpc("log_failed_login", { p_key: "0123456789abcdef0123456789abcdef", p_label: "api-test-nobody@demo.kchs.test", p_known: false, p_ip: "10.7.7.7" });
   ok(!!fa.error, "Admin: cannot call the failed sign-in log directly either");
-  const fs = await svc.rpc("log_failed_login", { p_email: "api-test-nobody@demo.kchs.test", p_ip: "10.7.7.7", p_user_agent: "api-test" });
+  const fs = await svc.rpc("log_failed_login", { p_key: "0123456789abcdef0123456789abcdef", p_label: "api-test-nobody@demo.kchs.test", p_known: false, p_ip: "10.7.7.7", p_user_agent: "api-test" });
   ok(!fs.error, "the app server (service key) may report a failed sign-in", fs.error?.message);
   const w = await ANON.rpc("log_event", { p_action: "x" });
   ok(!!w.error, "not signed in: cannot write any other log entry");

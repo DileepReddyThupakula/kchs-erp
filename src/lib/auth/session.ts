@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isHiddenAddress } from "@/lib/auth/login-id.mjs";
 import { can, type AppRole, type Capability, type Duty } from "./permissions";
 import type { AcademicYear } from "@/types/database";
 
@@ -45,7 +46,7 @@ export const getCurrentStaff = cache(async (): Promise<CurrentStaff | null> => {
 
   return {
     userId,
-    email: typeof claims.email === "string" ? claims.email : undefined,
+    email: typeof claims.email === "string" && !isHiddenAddress(claims.email) ? claims.email : undefined,
     staffId: staff.id,
     fullName: staff.full_name,
     role: staff.app_role,

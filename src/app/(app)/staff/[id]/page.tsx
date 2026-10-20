@@ -14,9 +14,10 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const me = await requireCapability("staff.viewAll");
   const supabase = await createClient();
-  const [{ data: s }, { data: dutyRows }] = await Promise.all([
+  const [{ data: s }, { data: dutyRows }, { data: loginRow }] = await Promise.all([
     supabase.from("staff").select("*").eq("id", id).maybeSingle(),
     supabase.from("staff_permissions").select("duty").eq("staff_id", id),
+    supabase.from("staff_logins").select("login_id, kind").eq("staff_id", id).maybeSingle(),   // only the Admin (and the person themself) can read this
   ]);
   if (!s) notFound();
   const duties = (dutyRows ?? []).map((r) => r.duty as Duty);
@@ -69,7 +70,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
           <h2 className="mb-2 font-semibold text-navy-900">ERP login</h2>
           {s.user_id && s.app_role ? (
             <p className="mb-3 text-sm">
-              <RoleBadge role={s.app_role} /> <span className="ml-1 break-all">{s.email}</span>
+              <RoleBadge role={s.app_role} /> <span className="ml-1 break-all">{loginRow?.login_id ?? s.email}</span>
             </p>
           ) : s.user_id ? (
             <p className="mb-3 text-sm text-muted">Login exists but access is revoked.</p>
@@ -77,7 +78,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
             <p className="mb-3 text-sm text-muted">No login. Many staff (e.g. ayah) don&apos;t need one.</p>
           )}
           {can(me, "users.manage") && (
-            <LoginPanel staffId={s.id} hasLogin={!!s.user_id} role={s.app_role} email={s.email} isSelf={s.id === me.staffId} />
+            <LoginPanel staffId={s.id} hasLogin={!!s.user_id} role={s.app_role} email={s.email} loginId={loginRow?.login_id ?? null} isSelf={s.id === me.staffId} />
           )}
         </Card>
         {(s.app_role === "teacher" || s.app_role === "computer_staff") && (

@@ -2,7 +2,7 @@
 // supabase_migrations.schema_migrations like `supabase db push` does. Refuses files already recorded.
 //   npm run db:apply -- supabase/migrations/20261013000001_students.sql        one file (development)
 //   npm run db:apply -- --all                                                  every file not yet applied, in order (development)
-//   npm run db:apply -- --all --production                                     the same on PRODUCTION (reads .env.production.local, asks you to confirm)
+//   npm run db:apply -- --all --production                                     the same on PRODUCTION (reads .env.kchs-production, asks you to confirm)
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import pg from "pg";

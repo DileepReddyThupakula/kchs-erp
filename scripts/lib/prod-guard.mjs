@@ -3,7 +3,7 @@
 //
 //  assertDevOnly(name)        seed / wipe / demo / test scripts: only the dev project (or a local database) is allowed.
 //  useTarget(name, {write})   scripts that may be pointed at production ON PURPOSE (backup, migrations, the demo check):
-//                             without --production they behave like assertDevOnly; with --production they load .env.production.local
+//                             without --production they behave like assertDevOnly; with --production they load .env.kchs-production
 //                             (and ignore .env.local completely) and require that the target is NOT a development project.
 import fs from "node:fs";
 import path from "node:path";
@@ -13,7 +13,9 @@ import readline from "node:readline/promises";
 export const DEV_REFS = ["cndkkullvdxwesskbznx"];
 /** The production project(s): used only to give a clearer message; refusal does not depend on this list. */
 export const PROD_REFS = ["zxgvxtwtdevlezciymjf"];
-export const PROD_FILE = ".env.production.local";
+/** What each project is called in the dashboard: typed by hand before anything dangerous (the Admin password reset). */
+export const PROJECT_NAMES = { cndkkullvdxwesskbznx: "kchs-erp-dev", zxgvxtwtdevlezciymjf: "kchs-erp-prod" };
+export const PROD_FILE = ".env.kchs-production";
 const SECRET_KEYS = ["DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "DEMO_USER_PASSWORD", "KCHS_ENV"];
 
 const REF = /^[a-z]{20}$/;
@@ -61,7 +63,7 @@ export function assertDevOnly(name, env = process.env) {
   if (why) refuse(name, `refused because ${why}\nThis script only ever runs against the development project.`);
 }
 
-/** Loads .env.production.local for this run only. Ignores whatever .env.local put in the environment. */
+/** Loads .env.kchs-production for this run only. Ignores whatever .env.local put in the environment. */
 export function loadProductionEnv(name) {
   const file = path.resolve(process.cwd(), PROD_FILE);
   if (!fs.existsSync(file)) refuse(name, `${PROD_FILE} was not found in the project folder.`);

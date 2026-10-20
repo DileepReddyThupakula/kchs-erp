@@ -1,7 +1,7 @@
 "use client";
 import { ActionForm } from "@/components/ui/action-form";
 import { Field, Input, Select } from "@/components/ui/form";
-import { changeRole, createLogin, resetPassword } from "@/features/staff/actions";
+import { changeLoginId, changeRole, createLogin, resetPassword } from "@/features/staff/actions";
 import { ASSIGNABLE_ROLES, ROLE_LABELS, type AppRole } from "@/lib/auth/permissions";
 
 const ROLES = ASSIGNABLE_ROLES.map((value) => ({ value, label: ROLE_LABELS[value] }));
@@ -11,12 +11,14 @@ export function LoginPanel({
   hasLogin,
   role,
   email,
+  loginId,
   isSelf,
 }: {
   staffId: string;
   hasLogin: boolean;
   role: AppRole | null;
   email: string | null;
+  loginId: string | null;
   isSelf: boolean;
 }) {
   if (!hasLogin) {
@@ -25,8 +27,11 @@ export function LoginPanel({
         {(fe) => (
           <>
             <input type="hidden" name="staff_id" value={staffId} />
-            <Field label="Login email" name="email" errors={fe.email}>
-              <Input name="email" type="email" defaultValue={email ?? ""} required />
+            <Field label="Login ID" name="login_id" errors={fe.login_id} hint="A 10-digit mobile number, a username (for example ravi.t), or an email. Two people cannot share one number: give the second person a username.">
+              <Input name="login_id" autoComplete="off" autoCapitalize="none" spellCheck={false} defaultValue={loginId ?? email ?? ""} required />
+            </Field>
+            <Field label="Email (optional)" name="email" errors={fe.email} hint="A real email for contact only. Not needed to sign in.">
+              <Input name="email" type="email" defaultValue={email ?? ""} />
             </Field>
             <Field label="Temporary password" name="password" errors={fe.password} hint="At least 10 characters. They choose their own at first sign-in.">
               <Input name="password" type="password" autoComplete="new-password" required />
@@ -60,6 +65,16 @@ export function LoginPanel({
                 ))}
                 <option value="">No access (revoke)</option>
               </Select>
+            </Field>
+          </>
+        )}
+      </ActionForm>
+      <ActionForm action={changeLoginId} submitLabel="Change login ID" className="space-y-3">
+        {(fe) => (
+          <>
+            <input type="hidden" name="staff_id" value={staffId} />
+            <Field label="Login ID" name="login_id" errors={fe.login_id} hint="For a new mobile number or a new username. It is the same account and the same password.">
+              <Input name="login_id" autoComplete="off" autoCapitalize="none" spellCheck={false} defaultValue={loginId ?? ""} required />
             </Field>
           </>
         )}
