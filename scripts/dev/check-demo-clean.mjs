@@ -6,6 +6,8 @@ await c.connect();
 const q = async (title, sql) => { const r = (await c.query(sql)).rows; console.log(`${r.length ? "CHECK" : "ok   "}  ${title}${r.length ? ": " + JSON.stringify(r) : ""}`); };
 await q("students who are not Active", "select admission_no, status from public.students where status <> 'active'");
 await q("certificates, prints or numbering series left behind", "select 'certificates' t, count(*) n from public.certificates having count(*) > 0 union all select 'prints', count(*) from public.certificate_prints having count(*) > 0 union all select 'series', count(*) from public.certificate_series having count(*) > 0");
+await q("ID cards, batches or numbering left behind", "select 'cards' t, count(*) n from public.id_cards having count(*) > 0 union all select 'series', count(*) from public.id_card_series having count(*) > 0");
+await q("ID card settings changed from the defaults", "select prefix, show_phone, show_blood_group from public.id_card_settings where prefix <> 'ID' or not show_phone or not show_blood_group");
 await q("people holding the certificates duty", "select s.employee_code from public.staff_permissions p join public.staff s on s.id = p.staff_id where p.duty = 'certificates_idcards'");
 await q("certificate settings or templates changed from the defaults", "select kind, layout_draft, wording_confirmed from public.certificate_templates where not layout_draft or wording_confirmed union all select 'settings', show_signature_image, (prefix_tc, prefix_bonafide, prefix_study) <> ('TC', 'BON', 'STU') from public.certificate_settings where show_signature_image or (prefix_tc, prefix_bonafide, prefix_study) <> ('TC', 'BON', 'STU')");
 await q("rollovers", "select id, status from public.rollover_runs");
