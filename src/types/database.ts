@@ -36,6 +36,7 @@ export type CertificateTemplate = Stamps & { kind: string; title_en: string; tit
 export type CertificateSettings = Stamps & { id: number; prefix_tc: string; prefix_bonafide: string; prefix_study: string; show_signature_image: boolean };
 export type CertificateSeries = Stamps & { kind: string; academic_year_id: string; start_no: number; next_no: number };
 export type CertificateRow = Stamps & { id: string; kind: string; academic_year_id: string; seq: number; number: string; student_id: string; status: string; language: string };
+export type IdCardRow = Stamps & { id: string; academic_year_id: string; seq: number; number: string; student_id: string; batch_id: string | null; status: string };
 export type ClassSubject = Stamps & {
   id: string;
   academic_year_id: string;
@@ -541,6 +542,7 @@ export type Database = {
       certificate_settings: T<CertificateSettings, "id">;
       certificate_series: T<CertificateSeries, "kind" | "academic_year_id">;
       certificates: T<CertificateRow, "kind" | "number">;
+      id_cards: T<IdCardRow, "number">;
       class_subjects: T<
         ClassSubject,
         "academic_year_id" | "class_id" | "subject_id",
@@ -784,6 +786,7 @@ export type Database = {
       id_card_sections: { Args: Record<string, never>; Returns: Json };
       id_card_candidates: { Args: { p_section?: string; p_class?: string }; Returns: Json };
       id_card_issue: { Args: { p_students: string[]; p_overrides?: Json }; Returns: Json };
+      id_card_preview: { Args: { p_students: string[] }; Returns: Json };
       id_card_print_data: { Args: { p_cards: string[] }; Returns: Json };
       id_card_print: { Args: { p_cards: string[] }; Returns: Json };
       id_card_replace: { Args: { p_card: string; p_reason: string; p_note?: string; p_pending_reason?: string }; Returns: Json };

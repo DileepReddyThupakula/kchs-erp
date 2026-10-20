@@ -10,10 +10,11 @@ import { friendlyDbError, type ActionState } from "@/lib/utils";
 import type { Json, StudentFieldDefinition } from "@/types/database";
 import { getSectionOptions, getStudentConfig, getStudentsPage, listStudents, type StudentRow, type StudentsPageParams } from "./queries";
 import { requirePage } from "./page-guard";
+import { imageSize } from "@/lib/image-size";
+import { photoProblem } from "./photo-rules";
 import { GENDERS, parseDefinitionValue, PHONE_RE, PIN_RE, validateImportRow, type ImportContext, type RawRow, type StudentPayload, type ValidatedRow } from "./fields";
 
 const uuid = z.string().uuid();
-const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const DOC_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 
 function ext(file: File) {
@@ -98,9 +99,12 @@ export async function saveStudentForm(_: ActionState, fd: FormData): Promise<Act
 
   // files
   const photo = fd.get("photo");
+  let photoDims: { width: number; height: number } | null = null;
   if (photo instanceof File && photo.size > 0) {
-    if (!PHOTO_TYPES.includes(photo.type)) err("photo", "Use a JPG, PNG or WEBP image");
-    if (photo.size > 2 * 1024 * 1024) err("photo", "Photo must be under 2 MB");
+    // the photo rules: JPEG or PNG, at least 300 x 400 pixels, at most 5 MB, passport shape (the database checks them again)
+    photoDims = imageSize(new Uint8Array(await photo.arrayBuffer()));
+    const problem = photoProblem(photoDims?.width, photoDims?.height, photo.size, photo.type);
+    if (problem) err("photo", problem);
   }
   const docs: { type: string; file: File }[] = [];
   for (const t of docTypes) {
@@ -142,7 +146,10 @@ export async function saveStudentForm(_: ActionState, fd: FormData): Promise<Act
     const path = `${sid}/photo-${Date.now()}.${ext(photo)}`;
     const up = await supabase.storage.from("student-photos").upload(path, photo, { contentType: photo.type });
     if (up.error) problems.push("photo");
-    else await supabase.from("students").update({ photo_path: path }).eq("id", sid);
+    else {
+      const set = await supabase.rpc("student_photo_set", { p_student: sid, p_path: path, p_w: photoDims?.width ?? 0, p_h: photoDims?.height ?? 0, p_bytes: photo.size, p_mime: photo.type });
+      if (set.error) problems.push("photo");
+    }
   }
   for (const d of docs) {
     const path = `${sid}/${d.type}-${Date.now()}.${ext(d.file)}`;

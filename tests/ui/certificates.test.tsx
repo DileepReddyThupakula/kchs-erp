@@ -1,7 +1,9 @@
 // Certificate screens: the print sheet (marks, boxes, warnings), the print panel (original / duplicate / reason / Telugu), the issue form gates,
 // the checklist, cancel, settings, and who sees the menu entry.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+
+configure({ asyncUtilTimeout: 5000 });   // generous: the test run is busy with browsers and databases at the same time
 
 vi.mock("server-only", () => ({}));
 const refresh = vi.fn();
@@ -165,11 +167,12 @@ const state = { needs_reason: false, copies: 1, last_language: "en" as const, ha
 const panel = (b: Bundle, s = state, issuedNow = false) => render(<CertificatePrintPanel id="c1" initial={b} state={s} issuedNow={issuedNow} school={school} footer={FOOT} />);
 
 describe("the print page", () => {
-  it("right after issuing, the first print is the original: no reason, no new log entry", () => {
+  it("right after issuing, the first print is the original: no reason, no new log entry", async () => {
     panel(bundle("bonafide"), state, true);
     expect(screen.queryByTestId("duplicate-reason")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Print the original" }));
     expect(printAction).not.toHaveBeenCalled();
+    await waitFor(() => expect(window.print).toHaveBeenCalledTimes(1));           // let the print timer finish inside this test
   });
   it("a later print needs a reason first, and shows DUPLICATE before printing", async () => {
     printAction.mockResolvedValue({ ok: true, bundle: bundle("bonafide", { duplicate: { is_duplicate: true, copy_no: 2, printed_at: "2026-10-20T05:00:00Z", reason: "lost", reason_note: null } }) });

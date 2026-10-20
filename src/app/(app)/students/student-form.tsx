@@ -232,13 +232,13 @@ export function StudentForm({
             <Field label="Admission date" name="s.admission_date" errors={fe["s.admission_date"]} hint="Blank = today">
               <Input id="s.admission_date" name="s.admission_date" type="date" defaultValue={s?.admission_date ?? ""} />
             </Field>
-            <Field label="Photo" name="photo" errors={fe.photo} hint="JPG, PNG or WEBP, under 2 MB">
+            <Field label="Photo" name="photo" errors={fe.photo} hint="JPEG or PNG, at least 300 x 400 pixels, under 5 MB">
               <div className="flex items-center gap-3">
                 {existing?.photoUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={existing.photoUrl} alt="" className="size-12 rounded-full object-cover ring-2 ring-gold-300" />
                 )}
-                <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-navy-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-navy-800" />
+                <input id="photo" name="photo" type="file" accept="image/jpeg,image/png" className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-navy-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-navy-800" />
               </div>
             </Field>
           </FormSection>
