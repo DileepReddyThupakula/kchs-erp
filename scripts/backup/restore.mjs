@@ -1,5 +1,5 @@
-// npm run restore:db  -- <backup file> --target "<connection string of the NEW database>" --key <private-key.pem>
-// npm run restore:files -- <archive file> --key <private-key.pem>      (uploads into the project named by TARGET_SUPABASE_URL + TARGET_SERVICE_KEY)
+// npm run restore:db  -- <backup file> --target "<connection string of the NEW database>" --key <private-key.kchskey>
+// npm run restore:files -- <archive file> --key <private-key.kchskey>      (uploads into the project named by TARGET_SUPABASE_URL + TARGET_SERVICE_KEY)
 // Restoring is for a NEW or EMPTY project. It refuses the live database unless you add --allow-live (disaster recovery only; read docs/BACKUP.md first).
 import fs from "node:fs";
 import readline from "node:readline/promises";
@@ -14,9 +14,8 @@ const flag = (n) => { const i = rest.indexOf(n); return i >= 0 ? rest[i + 1] : u
 const file = rest.find((a) => !a.startsWith("--") && fs.existsSync(a));
 const cfg = config();
 const privateKey = flag("--key") || cfg.privateKey;
-if (!["db", "files"].includes(mode) || !file) die("Usage: npm run restore:db -- <backup file> --target \"<new database url>\" --key <private-key.pem>\n       npm run restore:files -- <archive file> --key <private-key.pem>");
-if (!privateKey || !fs.existsSync(privateKey)) die("Give the private key file with  --key /path/to/private-key.pem  (the passphrase is asked next).");
-if (!fs.existsSync(cfg.publicKey)) die(`The public key file is needed too (${cfg.publicKey}); set BACKUP_PUBLIC_KEY.`);
+if (!["db", "files"].includes(mode) || !file) die("Usage: npm run restore:db -- <backup file> --target \"<new database url>\" --key <private-key.kchskey>\n       npm run restore:files -- <archive file> --key <private-key.kchskey>");
+if (!privateKey || !fs.existsSync(privateKey)) die("Give the private key file with  --key /path/to/private-key.kchskey  (the passphrase is asked next).");
 const ask = async (q) => { const rl = readline.createInterface({ input: process.stdin, output: process.stdout }); const a = await rl.question(q); rl.close(); return a.trim(); };
 
 if (mode === "db") {

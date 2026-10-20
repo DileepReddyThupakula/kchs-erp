@@ -8,7 +8,7 @@ const all = process.argv.includes("--all");
 
 // file names that must never be committed: backups, encrypted archives, keys, environment files
 const BAD_NAMES = [
-  /(^|\/)kchs-(db|files)-[^/]*\.enc(\.sha256|\.partial)?$/i, /\.enc(\.partial)?$/i, /\.(pem|p12|pfx|key|keystore|jks|age)$/i, /(^|\/)id_(rsa|ed25519|ecdsa)/,
+  /(^|\/)kchs-(db|files)-[^/]*\.enc(\.sha256|\.partial)?$/i, /\.enc(\.partial)?$/i, /\.(pem|p12|pfx|key|kchskey|keystore|jks|age)$/i, /(^|\/)id_(rsa|ed25519|ecdsa)/,
   /^(KCHS-Backups|KCHS-Backup-Keys|backups?|backup-keys)\//i, /\.dump$/i, /\.(sql\.gz|bak)$/i, /(^|\/)\.env(\.(?!example$)[^/]*)?$/,
 ];
 const PATTERNS = [

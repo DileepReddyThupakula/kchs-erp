@@ -1,7 +1,10 @@
 // Shared pieces of the backup tools. Nothing here prints a password, a key or a connection string.
 //  - everything is encrypted with a PUBLIC key while it is written; no unencrypted copy ever touches the disk
-//  - encryption is OpenSSL "cms" (public-key, AES-256-GCM, authenticated): only the private key, kept offline, can open it
-import { spawn, spawnSync } from "node:child_process";
+//  - encryption is done by Node itself (no OpenSSL needed, so it works the same on every Mac): a random AES-256-GCM key per file, locked with the
+//    RSA-4096 PUBLIC key (OAEP); the data is cut in 1 MB authenticated pieces. Only the private key (kept offline, passphrase-protected) opens it.
+import { EventEmitter } from "node:events";
+import { Readable } from "node:stream";
+import readline from "node:readline";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -25,10 +28,8 @@ export function die(msg) {
   process.exit(1);
 }
 
-export function requireOpenssl() {
-  const r = spawnSync("openssl", ["version"], { encoding: "utf8" });
-  if (r.error || !/OpenSSL 3/.test(r.stdout)) die("OpenSSL 3 is needed. Install it with:  brew install openssl   (then open a new Terminal window).");
-}
+/** Kept so older callers still work: nothing external is needed any more. */
+export function requireOpenssl() {}
 
 export function requirePublicKey(cfg) {
   if (!fs.existsSync(cfg.publicKey)) die(`The public key was not found at ${cfg.publicKey}.\nCreate your key pair first:  npm run backup:keygen   (see docs/BACKUP.md, step 1).`);
@@ -97,45 +98,126 @@ export async function readTar(readable, onEntry) {
     const p = pad(size).length;
     await need(p); buf = buf.subarray(p);
   }
+  while (!done) await more();     // read to the very end: this is also what checks the last piece of the encrypted file
 }
 
-// ------------------------------------------------------------------ encrypted output
-/** A writer whose bytes go straight into `openssl cms -encrypt` and from there into a .partial file; finish() renames it. */
+// ------------------------------------------------------------------ encryption (RSA-OAEP key wrap + chunked AES-256-GCM)
+const MAGIC = Buffer.from("KCHSENC1");
+const CHUNK = 1 << 20;
+const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
+const chunkNonce = (prefix, i) => Buffer.concat([prefix, u32(i)]);
+const chunkAad = (i, final) => Buffer.concat([u32(i), Buffer.from([final ? 1 : 0])]);   // the counter and the "last piece" mark are authenticated: no reordering, no cutting short
+
+/** Writes an encrypted file piece by piece. Only encrypted bytes (to a .partial file, renamed at the end) ever reach the disk. */
 export class EncryptedFile {
-  constructor(finalPath, publicKey) {
+  constructor(finalPath, publicKeyFile) {
     this.final = finalPath; this.partial = finalPath + ".partial";
     fs.mkdirSync(path.dirname(finalPath), { recursive: true, mode: 0o700 });
     this.out = fs.createWriteStream(this.partial, { mode: 0o600 });
     this.hash = crypto.createHash("sha256");
-    this.proc = spawn("openssl", ["cms", "-encrypt", "-binary", "-stream", "-aes-256-gcm", "-outform", "DER", "-recip", publicKey], { stdio: ["pipe", "pipe", "pipe"] });
-    this.err = ""; this.proc.stderr.on("data", (d) => (this.err += d));
-    this.proc.stdout.on("data", (d) => this.hash.update(d));
-    this.proc.stdout.pipe(this.out);
-    this.closed = new Promise((res) => this.out.on("close", res));
-    this.exited = new Promise((res) => this.proc.on("close", res));
-    this.proc.stdin.on("error", () => {});
+    this.key = crypto.randomBytes(32);
+    this.prefix = crypto.randomBytes(8);
+    this.i = 0; this.pending = []; this.pendingBytes = 0;
+    const wrapped = crypto.publicEncrypt({ key: fs.readFileSync(publicKeyFile), padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: "sha256" }, this.key);
+    const head = Buffer.from(JSON.stringify({ v: 1, alg: "RSA-OAEP-256+AES-256-GCM-chunked", chunk: CHUNK, key: wrapped.toString("base64"), nonce: this.prefix.toString("base64") }));
+    this.raw(Buffer.concat([MAGIC, u32(head.length), head]));
   }
-  async write(buf) { if (!this.proc.stdin.write(buf)) await new Promise((r) => this.proc.stdin.once("drain", r)); }
+  raw(buf) { this.hash.update(buf); return this.out.write(buf) ? null : new Promise((r) => this.out.once("drain", r)); }
+  async seal(plain, final) {
+    const c = crypto.createCipheriv("aes-256-gcm", this.key, chunkNonce(this.prefix, this.i));
+    c.setAAD(chunkAad(this.i, final));
+    const ct = Buffer.concat([c.update(plain), c.final()]);
+    this.i++;
+    await this.raw(Buffer.concat([u32(ct.length), ct, c.getAuthTag()]));
+  }
+  async write(buf) {
+    this.pending.push(buf); this.pendingBytes += buf.length;
+    while (this.pendingBytes >= CHUNK + 1) {          // always keep at least one byte back, so the last piece can be marked final
+      const all = Buffer.concat(this.pending);
+      await this.seal(all.subarray(0, CHUNK), false);
+      const rest = all.subarray(CHUNK); this.pending = [rest]; this.pendingBytes = rest.length;
+    }
+  }
   async entry(name, buf) { await this.write(tarHeader(name, buf.length)); await this.write(buf); await this.write(pad(buf.length)); }
   async finish() {
     await this.write(TAR_END);
-    this.proc.stdin.end();
-    const code = await this.exited; await this.closed;
-    if (code !== 0) { this.abort(); throw new Error("encryption failed: " + this.err.trim().slice(0, 300)); }
+    await this.seal(Buffer.concat(this.pending), true);
+    await new Promise((res, rej) => { this.out.on("error", rej); this.out.end(res); });
     fs.renameSync(this.partial, this.final);
     const sha = this.hash.digest("hex");
     fs.writeFileSync(this.final + ".sha256", `${sha}  ${path.basename(this.final)}\n`, { mode: 0o600 });
     return { path: this.final, bytes: fs.statSync(this.final).size, sha256: sha };
   }
-  abort() { try { this.proc.kill(); } catch {} try { this.out.destroy(); } catch {} fs.rmSync(this.partial, { force: true }); }
+  abort() { try { this.out.destroy(); } catch {} fs.rmSync(this.partial, { force: true }); }
 }
 
-// ------------------------------------------------------------------ decrypt (restore side)
-/** Starts `openssl cms -decrypt`; returns the process (stdout = the tar stream). The private key passphrase is asked on the keyboard. */
-export function decrypt(file, privateKey, publicKey) {
-  const args = ["cms", "-decrypt", "-inform", "DER", "-in", file, "-inkey", privateKey, "-recip", publicKey];
-  if (process.env.BACKUP_KEY_PASSPHRASE) args.push("-passin", "env:BACKUP_KEY_PASSPHRASE");
-  return spawn("openssl", args, { stdio: ["inherit", "pipe", "inherit"] });
+// ------------------------------------------------------------------ private key (passphrase-protected) and decryption
+/** Asks for a secret on the keyboard without showing it. BACKUP_KEY_PASSPHRASE is only for automatic tests. */
+export async function askSecret(prompt) {
+  if (process.env.BACKUP_KEY_PASSPHRASE) return process.env.BACKUP_KEY_PASSPHRASE;
+  if (!process.stdin.isTTY) die("A passphrase is needed, and this is not an interactive Terminal.");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+  rl._writeToOutput = (t) => { if (t.includes(prompt)) process.stdout.write(t); };   // hide what is typed
+  const a = await new Promise((r) => rl.question(prompt, r));
+  rl.close(); process.stdout.write("\n");
+  return a;
+}
+
+const SCRYPT = { N: 1 << 17, r: 8, p: 1, maxmem: 512 * 1024 * 1024 };
+/** The private key file: the RSA key, locked with AES-256-GCM under a key made from the passphrase with scrypt (slow on purpose). */
+export function lockPrivateKey(pkcs8Der, passphrase) {
+  const salt = crypto.randomBytes(16), iv = crypto.randomBytes(12);
+  const k = crypto.scryptSync(passphrase, salt, 32, SCRYPT);
+  const c = crypto.createCipheriv("aes-256-gcm", k, iv);
+  const ct = Buffer.concat([c.update(pkcs8Der), c.final()]);
+  return JSON.stringify({ kchs: "private-key", v: 1, kdf: "scrypt", N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p, salt: salt.toString("base64"), iv: iv.toString("base64"), tag: c.getAuthTag().toString("base64"), key: ct.toString("base64") }, null, 2) + "\n";
+}
+export function unlockPrivateKey(fileText, passphrase) {
+  let j; try { j = JSON.parse(fileText); } catch { throw new Error("That is not a KCHS private key file."); }
+  if (j.kchs !== "private-key") throw new Error("That is not a KCHS private key file.");
+  try {
+    const k = crypto.scryptSync(passphrase, Buffer.from(j.salt, "base64"), 32, { N: j.N, r: j.r, p: j.p, maxmem: SCRYPT.maxmem });
+    const d = crypto.createDecipheriv("aes-256-gcm", k, Buffer.from(j.iv, "base64"));
+    d.setAuthTag(Buffer.from(j.tag, "base64"));
+    return crypto.createPrivateKey({ key: Buffer.concat([d.update(Buffer.from(j.key, "base64")), d.final()]), format: "der", type: "pkcs8" });
+  } catch { throw new Error("Wrong passphrase, or the key file is damaged."); }
+}
+
+/** Opens an encrypted backup. Returns { stdout: Readable of the tar stream, on("close", cb(code)) }, like a child process, so callers stay simple. */
+export function decrypt(file, privateKeyFile) {
+  const ev = new EventEmitter();
+  let key = null;
+  const gen = async function* () {
+    const pass = await askSecret("Passphrase of the private key: ");
+    key = unlockPrivateKey(fs.readFileSync(privateKeyFile, "utf8"), pass);
+    const fd = await fs.promises.open(file, "r");
+    try {
+      let pos = 0;
+      const read = async (n) => { const b = Buffer.alloc(n); const { bytesRead } = await fd.read(b, 0, n, pos); pos += bytesRead; return b.subarray(0, bytesRead); };
+      const size = (await fd.stat()).size;
+      const m = await read(8);
+      if (!m.equals(MAGIC)) throw new Error("This is not a KCHS backup file (or it is damaged).");
+      const hl = (await read(4)).readUInt32BE();
+      const head = JSON.parse((await read(hl)).toString());
+      const aes = crypto.privateDecrypt({ key, padding: crypto.constants.RSA_PKCS1_OAEP_PADDING, oaepHash: "sha256" }, Buffer.from(head.key, "base64"));
+      const prefix = Buffer.from(head.nonce, "base64");
+      for (let i = 0; ; i++) {
+        const len = (await read(4)).readUInt32BE();
+        const body = await read(len + 16);
+        if (body.length !== len + 16) throw new Error("The backup file is cut short (damaged).");
+        const final = pos >= size;
+        const d = crypto.createDecipheriv("aes-256-gcm", aes, chunkNonce(prefix, i));
+        d.setAAD(chunkAad(i, final)); d.setAuthTag(body.subarray(len));
+        try { yield Buffer.concat([d.update(body.subarray(0, len)), d.final()]); } catch { throw new Error("The backup is damaged or has been changed: it does not pass its safety check."); }
+        if (final) break;
+      }
+    } finally { await fd.close(); }
+  };
+  const stdout = Readable.from(gen());
+  let code = null;                       // remembered, so "close" can be asked for after the stream has already ended
+  stdout.on("end", () => { code = 0; ev.emit("close", 0); });
+  stdout.on("error", (e) => { console.error("\nSTOP: " + e.message); code = 1; ev.emit("close", 1); });
+  return { stdout, on: (n, cb) => { if (n === "close" && code !== null) setImmediate(() => cb(code)); else ev.on(n, cb); } };
 }
 
 // ------------------------------------------------------------------ housekeeping

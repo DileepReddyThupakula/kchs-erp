@@ -27,13 +27,13 @@ The scripts run on **your Mac**, not in GitHub, so the database password is neve
    ```
    npm run backup:keygen
    ```
-2. It asks for a **passphrase** twice. Choose a long sentence you will remember. Write it on paper.
+2. It asks for a **passphrase** twice (typing is hidden; at least 12 characters). Choose a long sentence you will remember. Write it on paper. It then makes the keys, which takes a few seconds. It uses Node's own cryptography, so it works on any Mac (the Mac's built-in `openssl` is not used).
 3. It creates two files in `~/KCHS-Backup-Keys/`:
    - `public-key.pem`: *locks* backups. Safe to keep on the Mac. The backup scripts use it.
-   - `private-key.pem`: *opens* backups. **The master key.**
-4. **Right now:** copy `private-key.pem` to **two USB sticks** (label them "KCHS backup key 1 / 2"), keep them in two different places (for example home and the school safe or a relative's house). Keep the paper with the passphrase in a *third* place.
-5. **Check each copy works** before you delete anything: run the drill (step 5) once with `BACKUP_PRIVATE_KEY=/Volumes/<usb>/private-key.pem`.
-6. Only then **delete `private-key.pem` from the Mac** (and empty the Bin). Keep `public-key.pem`.
+   - `private-key.kchskey`: *opens* backups. **The master key**, locked with your passphrase (a stolen copy is useless without it, but still guard it).
+4. **Right now:** copy `private-key.kchskey` to **two USB sticks** (label them "KCHS backup key 1 / 2"), keep them in two different places (for example home and the school safe or a relative's house). Keep the paper with the passphrase in a *third* place.
+5. **Check each copy works** before you delete anything: run the drill (step 5) once with `BACKUP_PRIVATE_KEY=/Volumes/<usb>/private-key.kchskey`.
+6. Only then **delete `private-key.kchskey` from the Mac** (and empty the Bin). Keep `public-key.pem`.
 
 Never make a second key pair "to be safe": backups made with one pair cannot be opened with another. The tool refuses to overwrite an existing pair.
 
@@ -63,7 +63,7 @@ Do not copy the keys into Google Drive. A backup that exists only on the Mac is 
 
 A backup you have never restored is only a hope. Run:
 ```
-BACKUP_PRIVATE_KEY=/Volumes/<usb>/private-key.pem npm run restore:check
+BACKUP_PRIVATE_KEY=/Volumes/<usb>/private-key.kchskey npm run restore:check
 ```
 (You are asked for the passphrase.) It opens the newest database backup (and files archive), restores it into a **temporary database on your Mac that is deleted at the end**, and prints PASS/FAIL for: every table's row count, the security rules (row-level security, permissions, file-storage rules, the tamper-proof audit log), a staff login with its password, and every file in the archive. It needs PostgreSQL's tools once: `brew install postgresql@17`. After you go live, tell it which login to look for: `BACKUP_CHECK_EMAIL=you@school.example`.
 
@@ -86,12 +86,12 @@ BACKUP_PRIVATE_KEY=/Volumes/<usb>/private-key.pem npm run restore:check
 3. Get the newest good backup files (from Google Drive / the external drive) and the private key from the USB stick.
 4. Restore the database into the new project (the connection string is under Project → Connect, "Session pooler"; the tool refuses the live database unless you add `--allow-live`):
    ```
-   npm run restore:db -- ~/KCHS-Backups/kchs-db-<date>.enc --target "<new connection string>" --key /Volumes/<usb>/private-key.pem
+   npm run restore:db -- ~/KCHS-Backups/kchs-db-<date>.enc --target "<new connection string>" --key /Volumes/<usb>/private-key.kchskey
    ```
    It asks you to type `RESTORE`.
 5. Restore the files:
    ```
-   TARGET_SUPABASE_URL=https://<new>.supabase.co TARGET_SERVICE_KEY=<new service key> npm run restore:files -- ~/KCHS-Backups/kchs-files-<date>.enc --key /Volumes/<usb>/private-key.pem
+   TARGET_SUPABASE_URL=https://<new>.supabase.co TARGET_SERVICE_KEY=<new service key> npm run restore:files -- ~/KCHS-Backups/kchs-files-<date>.enc --key /Volumes/<usb>/private-key.kchskey
    ```
 6. Point the app at the new project (new URL and keys in the hosting settings), redo the Auth settings above, sign in as Admin, and look at students, fees and the audit log.
 7. Everything entered after the backup date is gone: re-enter it from paper receipts and registers.
@@ -106,7 +106,7 @@ Set it up once: GitHub → the repo → Settings → Secrets and variables → A
 **Watch it work for a week.** Look at the Actions tab each day: a green tick means it ran; a red cross also emails you. GitHub can delay or skip scheduled runs, so this lowers the risk of a pause but does not remove it. Also open the Supabase dashboard once a week and check the project says "Active".
 
 ## Safety net in the project
-`npm run scan:secrets` (and a hook that runs it before every commit: `git config core.hooksPath .githooks`, once) **fails** if a backup file, key, `.env` file, or something that looks like a password or key is staged for commit. The backup folders and `*.enc`, `*.pem` are also in `.gitignore`.
+`npm run scan:secrets` (and a hook that runs it before every commit: `git config core.hooksPath .githooks`, once) **fails** if a backup file, key, `.env` file, or something that looks like a password or key is staged for commit. The backup folders and `*.enc`, `*.pem`, `*.kchskey` are also in `.gitignore`.
 
 ---
 

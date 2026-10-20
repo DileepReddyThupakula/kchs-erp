@@ -1,6 +1,6 @@
 // npm run restore:check : the restore DRILL. Opens the newest backup, restores it into a THROW-AWAY local database
 // (created in a temporary folder and deleted at the end), then checks that the data, the login accounts and the safety rules came back.
-// Needs the private key (BACKUP_PRIVATE_KEY=/path/to/private-key.pem, passphrase asked) and PostgreSQL tools (brew install postgresql@17).
+// Needs the private key (BACKUP_PRIVATE_KEY=/path/to/private-key.kchskey, passphrase asked) and PostgreSQL tools (brew install postgresql@17).
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -14,7 +14,7 @@ const flag = (n) => { const i = process.argv.indexOf(n); return i >= 0 ? process
 const pick = (kind) => { const f = flag(kind === "db" ? "--db" : "--files"); if (f) return f; const l = listBackups(cfg.dir, kind); return l.length ? path.join(cfg.dir, l[l.length - 1]) : null; };
 const dbFile = pick("db"), filesFile = pick("files");
 if (!dbFile) die(`No database backup found in ${cfg.dir}. Run  npm run backup:db  first.`);
-if (!cfg.privateKey || !fs.existsSync(cfg.privateKey)) die("Tell me where the private key is:  BACKUP_PRIVATE_KEY=/path/to/private-key.pem npm run restore:check   (the passphrase is asked next).");
+if (!cfg.privateKey || !fs.existsSync(cfg.privateKey)) die("Tell me where the private key is:  BACKUP_PRIVATE_KEY=/path/to/private-key.kchskey npm run restore:check   (the passphrase is asked next).");
 const pgBin = ["/opt/homebrew/opt/postgresql@17/bin", "/opt/homebrew/opt/postgresql@16/bin", "/usr/local/opt/postgresql@17/bin"].find((d) => fs.existsSync(path.join(d, "initdb")));
 if (!pgBin) die("The PostgreSQL server programs are needed for the drill:  brew install postgresql@17");
 process.env.PATH = `${pgBin}:${process.env.PATH}`;

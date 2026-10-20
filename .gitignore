@@ -71,3 +71,4 @@ next-env.d.ts
 *.p12
 *.pfx
 *.age
+*.kchskey
