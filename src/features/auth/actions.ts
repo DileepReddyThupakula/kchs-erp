@@ -2,10 +2,10 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { headers } from "next/headers";
-import { isIP } from "node:net";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loginKey, loginLabel, parseLoginId } from "@/lib/auth/login-id.mjs";
+import { clientIp } from "@/lib/auth/client-ip";
 import type { ActionState } from "@/lib/utils";
 import { passwordSchema } from "@/features/staff/password";
 import { MUST_CHANGE_KEY } from "@/lib/auth/force-change";
@@ -37,9 +37,9 @@ export async function signIn(_: ActionState, formData: FormData): Promise<Action
     // Written by the SERVER with the service key (nobody signed out can call it), with the caller's IP and browser, a masked label and the keyed hash.
     try {
       const h = await headers();
-      const forwarded = (h.get("x-forwarded-for") ?? "").split(",")[0]?.trim() || h.get("x-real-ip")?.trim() || "";
+      const ip = clientIp(h);   // x-vercel-forwarded-for on Vercel; a client-supplied X-Forwarded-For is ignored there
       const { data: known } = await admin.from("staff_logins").select("id").eq("login_id", id.canonical).maybeSingle();
-      await admin.rpc("log_failed_login", { p_key: key, p_label: loginLabel(id), p_known: !!known, p_ip: isIP(forwarded) ? forwarded : undefined, p_user_agent: h.get("user-agent") ?? undefined });
+      await admin.rpc("log_failed_login", { p_key: key, p_label: loginLabel(id), p_known: !!known, p_ip: ip, p_user_agent: h.get("user-agent") ?? undefined });
     } catch { /* ignore */ }
     return { error: GENERIC };
   }

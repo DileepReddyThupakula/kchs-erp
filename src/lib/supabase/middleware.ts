@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { tracedFetch } from "./trace";
 import { forcedChangeRedirect } from "@/lib/auth/force-change";
+import { authCookieOptions, isHttpsRequest } from "@/lib/auth/cookie-options";
 
 const PUBLIC_PATHS = ["/login"];
 /** Fee pages: Admin and office staff with fee access only. Checked here, before anything renders, so a refused person gets a real
@@ -12,6 +13,7 @@ const startsWithAny = (path: string, list: string[]) => list.some((p) => path ==
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
+  const https = isHttpsRequest(request.headers, request.nextUrl.href);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,7 +25,7 @@ export async function updateSession(request: NextRequest) {
         setAll: (toSet) => {
           toSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
-          toSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          toSet.forEach(({ name, value, options }) => response.cookies.set(name, value, authCookieOptions(options, https)));
         },
       },
     },
