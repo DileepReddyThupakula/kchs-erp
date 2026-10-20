@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireCapability, requireStaff } from "@/lib/auth/session";
 import { translateDiaryEntry, translateNotice, translateNoticeText, REASON_TEXT } from "@/lib/translate/service";
 import { ATTACH_MAX, ATTACH_TYPES } from "./shared";
+import { checkUpload, DOCUMENTS, safeFileName } from "@/lib/upload-check";
+import { friendlyDbError } from "@/lib/utils";
 
 const uuid = z.string().uuid();
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -13,8 +15,7 @@ export type NtResult<T = unknown> = ({ ok: true; message?: string } & T) | { ok:
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 
 function msg(err: { code?: string; message: string }): string {
-  if (err.code === "42501") return "You don't have permission to do this.";
-  return err.message;
+  return friendlyDbError(err);
 }
 function refresh() {
   revalidatePath("/diary", "layout");
@@ -151,17 +152,19 @@ export async function uploadAttachment(formData: FormData): Promise<NtResult> {
   if (!ATTACH_TYPES.includes(file.type)) return fail("Only PDF and images (JPEG, PNG, WebP) can be attached.");
   if (file.size > ATTACH_MAX) return fail("The file is larger than 5 MB.");
   if (file.size === 0) return fail("The file is empty.");
+  const real = await checkUpload(file, DOCUMENTS);
+  if (!real.ok) return fail(real.error);
   const supabase = await createClient();
   const bucket = kind === "diary" ? "diary-files" : "notice-files";
-  const safe = file.name.replace(/[^\w.\- ]+/g, "_").slice(-80);
+  const safe = safeFileName(file.name);
   const path = `${parent}/${crypto.randomUUID()}-${safe}`;
-  const up = await supabase.storage.from(bucket).upload(path, file, { contentType: file.type });
-  if (up.error) return fail("The file could not be uploaded: " + up.error.message);
+  const up = await supabase.storage.from(bucket).upload(path, file, { contentType: real.mime });
+  if (up.error) return fail("The file could not be uploaded.");
   const rpc = kind === "diary" ? "add_diary_attachment" : "add_notice_attachment";
   const { error } =
     kind === "diary"
-      ? await supabase.rpc("add_diary_attachment", { p_entry: parent, p_path: path, p_name: file.name, p_mime: file.type, p_size: file.size })
-      : await supabase.rpc("add_notice_attachment", { p_notice: parent, p_path: path, p_name: file.name, p_mime: file.type, p_size: file.size });
+      ? await supabase.rpc("add_diary_attachment", { p_entry: parent, p_path: path, p_name: safe, p_mime: real.mime, p_size: file.size })
+      : await supabase.rpc("add_notice_attachment", { p_notice: parent, p_path: path, p_name: safe, p_mime: real.mime, p_size: file.size });
   void rpc;
   if (error) {
     await supabase.storage.from(bucket).remove([path]);

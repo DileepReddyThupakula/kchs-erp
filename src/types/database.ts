@@ -808,7 +808,7 @@ export type Database = {
       id_card_settings_get: { Args: Record<string, never>; Returns: Json };
       certificate_school_check: { Args: Record<string, never>; Returns: Json };
       audit_alerts: { Args: { p_days?: number }; Returns: Json };
-      log_failed_login: { Args: { p_email: string }; Returns: undefined };
+      log_failed_login: { Args: { p_email: string; p_ip?: string; p_user_agent?: string }; Returns: undefined };
       admin_dashboard: { Args: { p_year: string; p_today: string }; Returns: Json };
       notice_read_counts: { Args: never; Returns: { notice_id: string; read_count: number; total: number }[] };
       subject_result_calc: { Args: { p_student: string; p_group: string; p_subject: string }; Returns: Json };

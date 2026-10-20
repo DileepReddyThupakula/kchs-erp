@@ -28,7 +28,7 @@ export function LoginPanel({
             <Field label="Login email" name="email" errors={fe.email}>
               <Input name="email" type="email" defaultValue={email ?? ""} required />
             </Field>
-            <Field label="Temporary password" name="password" errors={fe.password} hint="At least 8 characters">
+            <Field label="Temporary password" name="password" errors={fe.password} hint="At least 10 characters. They choose their own at first sign-in.">
               <Input name="password" type="password" autoComplete="new-password" required />
             </Field>
             <Field label="Role" name="app_role" errors={fe.app_role}>

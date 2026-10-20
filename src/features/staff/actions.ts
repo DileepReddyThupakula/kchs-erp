@@ -7,6 +7,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireCapability } from "@/lib/auth/session";
 import { ASSIGNABLE_ROLES, DUTIES, dutiesFor, type Duty } from "@/lib/auth/permissions";
 import { friendlyDbError, type ActionState } from "@/lib/utils";
+import { passwordSchema } from "./password";
+import { MUST_CHANGE_KEY } from "@/lib/auth/force-change";
 
 const opt = z
   .string()
@@ -71,7 +73,6 @@ export async function saveStaff(_: ActionState, fd: FormData): Promise<ActionSta
 // ---------------------------------------------------------------- logins
 // Computer Staff is not assignable (the database refuses it too).
 const roleSchema = z.enum(ASSIGNABLE_ROLES);
-const passwordSchema = z.string().min(8, "At least 8 characters");
 
 /** Create an Auth login for a staff member and give it a role. Admin only. */
 export async function createLogin(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -88,9 +89,9 @@ export async function createLogin(_: ActionState, fd: FormData): Promise<ActionS
   const { staff_id, email, password, app_role } = parsed.data;
 
   const admin = createAdminClient();
-  const { data: created, error: authErr } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+  const { data: created, error: authErr } = await admin.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { [MUST_CHANGE_KEY]: true } });
   if (authErr || !created.user) {
-    return { error: authErr?.message.includes("already") ? "A login with this email already exists." : authErr?.message ?? "Could not create login." };
+    return { error: authErr?.message.includes("already") ? "A login with this email already exists." : (console.error("[auth-error]", authErr?.message), "Could not create the login. Please try again.") };
   }
 
   // Link via the Admin's own session so RLS + audit log record who did it.
@@ -102,7 +103,7 @@ export async function createLogin(_: ActionState, fd: FormData): Promise<ActionS
   }
   await supabase.rpc("log_event", { p_action: "staff.login_created", p_table: "staff", p_record_id: staff_id, p_details: { role: app_role } });
   revalidatePath("/staff", "layout");
-  return { ok: true, message: "Login created. Share the password with the staff member in person." };
+  return { ok: true, message: "Login created. Share the password with the staff member in person. They must choose their own password the first time they sign in." };
 }
 
 export async function changeRole(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -125,10 +126,10 @@ export async function resetPassword(_: ActionState, fd: FormData): Promise<Actio
   const supabase = await createClient();
   const { data: staff } = await supabase.from("staff").select("user_id").eq("id", parsed.data.staff_id).single();
   if (!staff?.user_id) return { error: "This staff member has no login." };
-  const { error } = await createAdminClient().auth.admin.updateUserById(staff.user_id, { password: parsed.data.password });
-  if (error) return { error: error.message };
+  const { error } = await createAdminClient().auth.admin.updateUserById(staff.user_id, { password: parsed.data.password, app_metadata: { [MUST_CHANGE_KEY]: true } });
+  if (error) { console.error("[auth-error]", error.message); return { error: "Could not set the password. Please try again." }; }
   await supabase.rpc("log_event", { p_action: "staff.password_reset", p_table: "staff", p_record_id: parsed.data.staff_id });
-  return { ok: true, message: "Password changed." };
+  return { ok: true, message: "Password changed. They must choose their own password the next time they sign in." };
 }
 
 // ---------------------------------------------------------------- duties

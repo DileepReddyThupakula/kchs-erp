@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability, requireStaff } from "@/lib/auth/session";
+import { friendlyDbError } from "@/lib/utils";
 
 const uuid = z.string().uuid();
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -16,8 +17,7 @@ function msg(err: { code?: string; message: string }): string {
     if (/not assigned to you/.test(err.message)) return "This session is assigned to another teacher today.";
     return "You don't have permission to do this.";
   }
-  if (err.code === "23505" && /overlaps/.test(err.message)) return err.message;
-  return err.message;
+  return friendlyDbError(err);
 }
 function refresh() {
   revalidatePath("/attendance", "layout");

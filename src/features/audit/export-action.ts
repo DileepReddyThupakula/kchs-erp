@@ -1,4 +1,5 @@
 "use server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requirePage } from "@/features/students/page-guard";
 import { todayIst } from "@/features/fees/shared";
@@ -12,6 +13,7 @@ export type AuditExport = { error: string } | { headers: string[]; rows: (string
  */
 export async function exportAuditLog(params: Record<string, string>, format: "csv" | "xlsx"): Promise<AuditExport> {
   await requirePage("/audit-log");
+  if (!z.record(z.string().max(60), z.string().max(200)).safeParse(params).success || !z.enum(["csv", "xlsx"]).safeParse(format).success) return { error: "The filters were not understood. Reload the page and try again." };
   const f = parseAuditFilters(params, todayIst());
   const supabase = await createClient();
   const args = auditRpcArgs(f);

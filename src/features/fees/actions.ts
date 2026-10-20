@@ -8,6 +8,7 @@ import { friendlyDbError, type ActionState } from "@/lib/utils";
 import type { Json } from "@/types/database";
 import { UPI_ID_RE } from "./upi";
 import { getFeeHeads, toDueRow, type DueRow } from "./queries";
+import { checkUpload, IMAGES } from "@/lib/upload-check";
 
 const uuid = z.string().uuid();
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -473,14 +474,14 @@ export async function uploadPaymentQr(_: ActionState, fd: FormData): Promise<Act
   await requireCapability("fees.setup");
   const file = fd.get("file");
   if (!(file instanceof File) || file.size === 0) return invalid("Choose the QR image.", "file");
-  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) return invalid("Use a PNG, JPG or WEBP image.", "file");
   if (file.size > 2 * 1024 * 1024) return invalid("The image must be under 2 MB.", "file");
+  const real = await checkUpload(file, IMAGES);
+  if (!real.ok) return invalid("Use a PNG, JPG or WEBP image. " + real.error, "file");
   const supabase = await createClient();
   const { data: cur } = await supabase.from("fee_settings").select("qr_path").eq("id", 1).single();
-  const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const path = `qr-${Date.now()}.${ext}`;
-  const up = await supabase.storage.from("payment-qr").upload(path, file, { contentType: file.type });
-  if (up.error) return invalid(up.error.message);
+  const path = `qr-${Date.now()}.${real.ext}`;
+  const up = await supabase.storage.from("payment-qr").upload(path, file, { contentType: real.mime });
+  if (up.error) return invalid(dbMessage(up.error as { message: string }));
   const { error } = await supabase.from("fee_settings").update({ qr_path: path }).eq("id", 1);
   if (error) return invalid(dbMessage(error));
   if (cur?.qr_path) await supabase.storage.from("payment-qr").remove([cur.qr_path]);

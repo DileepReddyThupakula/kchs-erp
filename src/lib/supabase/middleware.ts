@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { tracedFetch } from "./trace";
+import { forcedChangeRedirect } from "@/lib/auth/force-change";
 
 const PUBLIC_PATHS = ["/login"];
 /** Fee pages: Admin and office staff with fee access only. Checked here, before anything renders, so a refused person gets a real
@@ -42,6 +43,14 @@ export async function updateSession(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname;
+  // a new or reset login must choose its own password first
+  const forced = user ? forcedChangeRedirect(user as { app_metadata?: Record<string, unknown> }, path) : null;
+  if (forced) {
+    const url = request.nextUrl.clone();
+    url.pathname = forced;
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
   if (user && startsWithAny(path, FEE_PATHS)) {
     const adminOnly = startsWithAny(path, ADMIN_ONLY_FEE_PATHS);
     const { data: allowed } = adminOnly ? await supabase.rpc("my_role").then((r) => ({ data: r.data === "admin" })) : await supabase.rpc("has_duty", { p_duty: "fee_collection" });

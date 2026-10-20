@@ -1,16 +1,23 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requirePage } from "@/features/students/page-guard";
+import { checkBytes, PHOTOS } from "@/lib/upload-check";
 import type { Bundle, Candidate, SectionOption } from "./shared";
+import { safeDbMessage } from "@/lib/utils";
 
 export type Res<T extends object = object> = ({ ok: true } & T) | { ok: false; error: string };
 const GUARD = "/students/id-cards";
 
+const uuid = z.string().uuid();
+const uuids = z.array(uuid).max(1000);
+const bad = (what = "The request"): { ok: false; error: string } => ({ ok: false, error: `${what} was not understood. Reload the page and try again.` });
+
 function plain(message: string | undefined): string {
   if (!message) return "Something went wrong. Nothing was changed.";
   if (/permission denied|not allowed/i.test(message)) return "You do not have access to this.";
-  return message;
+  return safeDbMessage(message);
 }
 async function db() {
   await requirePage(GUARD);
@@ -26,6 +33,7 @@ export async function loadSections(): Promise<Res<{ year: string; sections: Sect
 }
 
 export async function loadCandidates(section: string | null, klass: string | null): Promise<Res<{ rows: Candidate[] }>> {
+  if (!z.object({ a: uuid.nullable(), b: uuid.nullable() }).safeParse({ a: section, b: klass }).success) return bad();
   const s = await db();
   const { data, error } = await s.rpc("id_card_candidates", { p_section: section ?? undefined, p_class: klass ?? undefined });
   if (error) return { ok: false, error: plain(error.message) };
@@ -34,6 +42,7 @@ export async function loadCandidates(section: string | null, klass: string | nul
 
 /** The cards as they will look, before any number is given. Signed photo links are made here, on the server. */
 export async function previewCards(students: string[]): Promise<Res<{ bundle: Bundle; photos: Record<string, string> }>> {
+  if (!uuids.safeParse(students).success) return bad();
   const s = await db();
   const { data, error } = await s.rpc("id_card_preview", { p_students: students });
   if (error) return { ok: false, error: plain(error.message) };
@@ -51,6 +60,7 @@ export async function signedPhotos(s: Awaited<ReturnType<typeof createClient>>, 
 }
 
 export async function issueCards(students: string[], overrides: Record<string, string>): Promise<Res<{ batchId: string | null; issued: { card_id: string; student_id: string; name: string; number: string }[]; skipped: { student_id: string; name: string; reason: string }[] }>> {
+  if (!uuids.safeParse(students).success || !z.record(uuid, z.string().max(300)).safeParse(overrides).success) return bad();
   const s = await db();
   const { data, error } = await s.rpc("id_card_issue", { p_students: students, p_overrides: overrides });
   if (error) return { ok: false, error: plain(error.message) };
@@ -61,6 +71,7 @@ export async function issueCards(students: string[], overrides: Record<string, s
 
 /** The same sheet again (printer jam): the database allows it only for the same person within 10 minutes. */
 export async function printCards(cards: string[]): Promise<Res> {
+  if (!uuids.safeParse(cards).success) return bad();
   const s = await db();
   const { error } = await s.rpc("id_card_print", { p_cards: cards });
   if (error) return { ok: false, error: plain(error.message) };
@@ -68,6 +79,7 @@ export async function printCards(cards: string[]): Promise<Res> {
 }
 
 export async function replaceCard(card: string, reason: string, note: string, pending: string): Promise<Res<{ cardId: string; number: string }>> {
+  if (!z.object({ card: uuid, reason: z.string().max(60), note: z.string().max(300), pending: z.string().max(300) }).safeParse({ card, reason, note, pending }).success) return bad();
   const s = await db();
   const { data, error } = await s.rpc("id_card_replace", { p_card: card, p_reason: reason, p_note: note || undefined, p_pending_reason: pending || undefined });
   if (error) return { ok: false, error: plain(error.message) };
@@ -77,6 +89,7 @@ export async function replaceCard(card: string, reason: string, note: string, pe
 }
 
 export async function cancelCard(card: string, reason: string): Promise<Res> {
+  if (!z.object({ card: uuid, reason: z.string().max(300) }).safeParse({ card, reason }).success) return bad();
   const s = await db();
   const { error } = await s.rpc("id_card_cancel", { p_card: card, p_reason: reason });
   if (error) return { ok: false, error: plain(error.message) };
@@ -86,6 +99,7 @@ export async function cancelCard(card: string, reason: string): Promise<Res> {
 
 export type Lookup = { found: boolean; card_id?: string; number?: string; status?: "issued" | "cancelled"; cancel_kind?: string | null; cancel_reason?: string | null; year?: string; student_id?: string; name?: string; admission_no?: string; class?: string | null; student_status?: string; replaced_by?: string | null };
 export async function lookupCard(number: string): Promise<Res<{ result: Lookup }>> {
+  if (!z.string().trim().max(60).safeParse(number).success) return bad();
   const s = await db();
   const { data, error } = await s.rpc("id_card_lookup", { p_number: number });
   if (error) return { ok: false, error: plain(error.message) };
@@ -93,6 +107,7 @@ export async function lookupCard(number: string): Promise<Res<{ result: Lookup }
 }
 
 export async function exportRegister(year: string, format: "csv" | "xlsx"): Promise<Res<{ headers: string[]; rows: (string | number | null)[][] }>> {
+  if (!z.object({ year: uuid, format: z.enum(["csv", "xlsx"]) }).safeParse({ year, format }).success) return bad();
   const s = await db();
   const { data, error } = await s.rpc("id_card_register_export", { p_year: year, p_format: format });
   if (error) return { ok: false, error: plain(error.message) };
@@ -106,6 +121,7 @@ export async function exportRegister(year: string, format: "csv" | "xlsx"): Prom
 }
 
 export async function saveSettings(prefix: string, phone: boolean, blood: boolean): Promise<Res> {
+  if (!z.object({ prefix: z.string().trim().min(1).max(12), phone: z.boolean(), blood: z.boolean() }).safeParse({ prefix, phone, blood }).success) return bad("The card number prefix");
   const s = await db();
   const { error } = await s.rpc("id_card_settings_save", { p_prefix: prefix, p_show_phone: phone, p_show_blood_group: blood });
   if (error) return { ok: false, error: plain(error.message) };
@@ -116,18 +132,29 @@ export async function saveSettings(prefix: string, phone: boolean, blood: boolea
 // ------------------------------------------------------------------ bulk photos
 export type PlanRow = { name: string; admission_no: string; student_id: string | null; student: string | null; class: string | null; status: "ok" | "no_match" | "duplicate" | "student_left" | "problem"; problem: string | null; replaces: boolean };
 export async function planPhotos(files: { name: string; width: number; height: number; bytes: number; mime: string }[]): Promise<Res<{ rows: PlanRow[] }>> {
+  if (!z.array(z.object({ name: z.string().max(200), width: z.number().int().min(0).max(100000), height: z.number().int().min(0).max(100000), bytes: z.number().int().min(0).max(50_000_000), mime: z.string().max(60) })).max(500).safeParse(files).success) return bad("The file list");
   const s = await db();
   const { data, error } = await s.rpc("student_photos_plan", { p_files: files });
   if (error) return { ok: false, error: plain(error.message) };
   return { ok: true, rows: data as unknown as PlanRow[] };
 }
 export async function recordPhoto(student: string, path: string, w: number, h: number, bytes: number, mime: string): Promise<Res> {
+  if (!z.object({ student: uuid, path: z.string().regex(/^[0-9a-f-]{36}\/photo-\d+\.(jpg|png)$/), w: z.number().int().min(0).max(100000), h: z.number().int().min(0).max(100000), bytes: z.number().int().min(0).max(50_000_000) }).safeParse({ student, path, w, h, bytes }).success || !path.startsWith(`${student}/`)) return bad("The photo");
   const s = await db();
+  // the browser uploaded this file straight to private storage: check what it really is before it is recorded
+  const dl = await s.storage.from("student-photos").download(path);
+  const real = dl.data ? checkBytes(new Uint8Array(await dl.data.slice(0, 16).arrayBuffer()), PHOTOS) : null;
+  if (!real || !real.ok) {
+    await s.storage.from("student-photos").remove([path]);
+    return { ok: false, error: "This file is not a real JPG or PNG photo, so it was not saved." };
+  }
+  mime = real.mime;
   const { error } = await s.rpc("student_photo_set", { p_student: student, p_path: path, p_w: w, p_h: h, p_bytes: bytes, p_mime: mime });
   if (error) return { ok: false, error: plain(error.message) };
   return { ok: true };
 }
 export async function logBulkPhotos(count: number, label: string): Promise<Res> {
+  if (!z.object({ count: z.number().int().min(0).max(5000), label: z.string().max(200) }).safeParse({ count, label }).success) return bad();
   const s = await db();
   const { error } = await s.rpc("student_photos_bulk_log", { p_count: count, p_label: label });
   if (error) return { ok: false, error: plain(error.message) };

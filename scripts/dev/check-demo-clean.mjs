@@ -9,7 +9,13 @@ await q("certificates, prints or numbering series left behind", "select 'certifi
 await q("ID cards, batches or numbering left behind", "select 'cards' t, count(*) n from public.id_cards having count(*) > 0 union all select 'series', count(*) from public.id_card_series having count(*) > 0");
 await q("ID card settings changed from the defaults", "select prefix, show_phone, show_blood_group from public.id_card_settings where prefix <> 'ID' or not show_phone or not show_blood_group");
 await q("people holding the certificates duty", "select s.employee_code from public.staff_permissions p join public.staff s on s.id = p.staff_id where p.duty = 'certificates_idcards'");
-await q("certificate settings or templates changed from the defaults", "select kind, layout_draft, wording_confirmed from public.certificate_templates where not layout_draft or wording_confirmed union all select 'settings', show_signature_image, (prefix_tc, prefix_bonafide, prefix_study) <> ('TC', 'BON', 'STU') from public.certificate_settings where show_signature_image or (prefix_tc, prefix_bonafide, prefix_study) <> ('TC', 'BON', 'STU')");
+// Expected resting state (not a problem): templates are DRAFT layout with the wording not yet confirmed, and the Admin's own "show signature image" setting may be ON.
+await q("certificate templates changed from the defaults (draft layout, wording not confirmed)", "select kind, layout_draft, wording_confirmed from public.certificate_templates where not layout_draft or wording_confirmed");
+await q("certificate number prefixes changed from the defaults", "select prefix_tc, prefix_bonafide, prefix_study from public.certificate_settings where (prefix_tc, prefix_bonafide, prefix_study) <> ('TC', 'BON', 'STU')");
+{
+  const sig = (await c.query("select show_signature_image from public.certificate_settings limit 1")).rows[0];
+  console.log(`info   certificate sheets show the signature image: ${sig?.show_signature_image ? "ON (the Admin's own setting, expected)" : "off"}`);
+}
 await q("rollovers", "select id, status from public.rollover_runs");
 await q("extra academic years", "select name from public.academic_years where name <> '2026-27'");
 await q("throw-away test rows (years, classes, staff)", "select name from public.academic_years where name ~ '^(TEST|TMP|CE-|RO-|AU-)' union all select name from public.classes where name ~ '^(TEST|CE |RO )' union all select employee_code from public.staff where employee_code ~ '^(TEST|CE-|RO-|AU-)'");

@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
+import { friendlyDbError } from "@/lib/utils";
 
 const uuid = z.string().uuid();
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -25,14 +26,14 @@ function msg(err: { code?: string; message: string }): string {
   if (err.code === "23505") {
     if (/section_id.*weekday.*period_no|timetable_entries_section/.test(err.message)) return "That period already has an entry. Clear it first.";
     if (/duplicate key/.test(err.message)) return "That teacher is already booked in that period.";
-    return err.message;
+    return friendlyDbError(err);
   }
   if (err.code === "23503") {
     if (/teacher_assignments/.test(err.message)) return "That teacher is not assigned to that subject in this section (see Teacher assignments).";
     return "This is still in use elsewhere, so it can't be removed.";
   }
   if (err.code === "23P01") return "Bell times overlap. Each period or break must start after the previous one ends.";
-  return err.message;
+  return friendlyDbError(err);
 }
 
 // ------------------------------------------------------------------ class timetable cells

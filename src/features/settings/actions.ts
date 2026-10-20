@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { friendlyDbError, type ActionState } from "@/lib/utils";
+import { checkUpload, LOGOS } from "@/lib/upload-check";
 
 const optional = z
   .string()
@@ -65,7 +66,6 @@ export async function updateSettings(_: ActionState, formData: FormData): Promis
   return { ok: true, message: "Settings saved." };
 }
 
-const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 
 /** Upload logo or principal signature to the `branding` bucket. */
 export async function uploadBrandingImage(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -74,14 +74,14 @@ export async function uploadBrandingImage(_: ActionState, formData: FormData): P
   const file = formData.get("file");
   if (kind !== "logo" && kind !== "signature") return { error: "Unknown image type." };
   if (!(file instanceof File) || file.size === 0) return { error: "Choose an image file." };
-  if (!IMAGE_TYPES.includes(file.type)) return { error: "Use a PNG, JPG, WEBP or SVG image." };
   if (file.size > 2 * 1024 * 1024) return { error: "Image must be under 2 MB." };
+  const real = await checkUpload(file, LOGOS);
+  if (!real.ok) return { error: "Use a PNG or JPG image. " + real.error };
 
   const supabase = await createClient();
-  const ext = file.name.split(".").pop()?.toLowerCase() || "png";
-  const path = `${kind}-${Date.now()}.${ext}`;
-  const { error: upErr } = await supabase.storage.from("branding").upload(path, file, { contentType: file.type });
-  if (upErr) return { error: upErr.message };
+  const path = `${kind}-${Date.now()}.${real.ext}`;
+  const { error: upErr } = await supabase.storage.from("branding").upload(path, file, { contentType: real.mime });
+  if (upErr) return { error: friendlyDbError(upErr as { message: string }) };
 
   const patch = kind === "logo" ? { logo_path: path } : { principal_signature_path: path };
   const { error } = await supabase.from("school_settings").update(patch).eq("id", 1);

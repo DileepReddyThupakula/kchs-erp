@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePage } from "@/features/students/page-guard";
 import type { Preview } from "./shared";
+import { safeDbMessage } from "@/lib/utils";
 
 export type PreviewResult = { ok: true; preview: Preview } | { ok: false; error: string };
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
@@ -10,7 +11,7 @@ export type ActionResult = { ok: true; message: string } | { ok: false; error: s
 /** A Postgres error as a short sentence for the Admin. */
 function plain(message: string | undefined) {
   if (!message) return "Something went wrong. Nothing was changed.";
-  return message.replace(/^.*?(Type the new year|Tick |The checklist|Cannot undo|Unknown)/, "$1");
+  return safeDbMessage(message.replace(/^.*?(Type the new year|Tick |The checklist|Cannot undo|Unknown)/, "$1"));
 }
 
 /** What would happen with these choices. Changes nothing. Admin only (checked here and again in the database). */

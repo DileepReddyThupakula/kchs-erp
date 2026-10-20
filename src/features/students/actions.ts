@@ -14,12 +14,11 @@ import { imageSize } from "@/lib/image-size";
 import { photoProblem } from "./photo-rules";
 import { GENDERS, parseDefinitionValue, PHONE_RE, PIN_RE, validateImportRow, type ImportContext, type RawRow, type StudentPayload, type ValidatedRow } from "./fields";
 
+import { checkUpload, DOCUMENTS, PHOTOS, safeFileName, safePathPart, type Checked } from "@/lib/upload-check";
+
 const uuid = z.string().uuid();
 const DOC_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 
-function ext(file: File) {
-  return (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
-}
 
 /** Map a database error to a field (when we can tell) or a general message. */
 function saveError(err: { code?: string; message: string }, defs: StudentFieldDefinition[]): ActionState {
@@ -100,19 +99,29 @@ export async function saveStudentForm(_: ActionState, fd: FormData): Promise<Act
   // files
   const photo = fd.get("photo");
   let photoDims: { width: number; height: number } | null = null;
+  let photoCheck: Checked | null = null;
   if (photo instanceof File && photo.size > 0) {
     // the photo rules: JPEG or PNG, at least 300 x 400 pixels, at most 5 MB, passport shape (the database checks them again)
     photoDims = imageSize(new Uint8Array(await photo.arrayBuffer()));
     const problem = photoProblem(photoDims?.width, photoDims?.height, photo.size, photo.type);
     if (problem) err("photo", problem);
+    else {
+      photoCheck = await checkUpload(photo, PHOTOS);
+      if (!photoCheck.ok) err("photo", photoCheck.error);
+    }
   }
-  const docs: { type: string; file: File }[] = [];
+  const docs: { type: string; file: File; real: { mime: string; ext: string } }[] = [];
   for (const t of docTypes) {
     const f = fd.get(`doc.${t.code}`);
     if (f instanceof File && f.size > 0) {
       if (!DOC_TYPES.includes(f.type)) err(`doc.${t.code}`, "Use a PDF or an image");
       else if (f.size > 5 * 1024 * 1024) err(`doc.${t.code}`, "Must be under 5 MB");
-      else docs.push({ type: t.code, file: f });
+      else if (!safePathPart(t.code)) err(`doc.${t.code}`, "This document type cannot be used");
+      else {
+        const real = await checkUpload(f, DOCUMENTS);
+        if (!real.ok) err(`doc.${t.code}`, real.error);
+        else docs.push({ type: t.code, file: f, real });
+      }
     }
   }
   if (Object.keys(fieldErrors).length) return { fieldErrors, error: "Please fix the highlighted fields." };
@@ -142,20 +151,20 @@ export async function saveStudentForm(_: ActionState, fd: FormData): Promise<Act
 
   // photo + documents (after the record exists)
   const problems: string[] = [];
-  if (photo instanceof File && photo.size > 0) {
-    const path = `${sid}/photo-${Date.now()}.${ext(photo)}`;
-    const up = await supabase.storage.from("student-photos").upload(path, photo, { contentType: photo.type });
+  if (photo instanceof File && photo.size > 0 && photoCheck?.ok) {
+    const path = `${sid}/photo-${Date.now()}.${photoCheck.ext}`;
+    const up = await supabase.storage.from("student-photos").upload(path, photo, { contentType: photoCheck.mime });
     if (up.error) problems.push("photo");
     else {
-      const set = await supabase.rpc("student_photo_set", { p_student: sid, p_path: path, p_w: photoDims?.width ?? 0, p_h: photoDims?.height ?? 0, p_bytes: photo.size, p_mime: photo.type });
+      const set = await supabase.rpc("student_photo_set", { p_student: sid, p_path: path, p_w: photoDims?.width ?? 0, p_h: photoDims?.height ?? 0, p_bytes: photo.size, p_mime: photoCheck.mime });
       if (set.error) problems.push("photo");
     }
   }
   for (const d of docs) {
-    const path = `${sid}/${d.type}-${Date.now()}.${ext(d.file)}`;
-    const up = await supabase.storage.from("student-documents").upload(path, d.file, { contentType: d.file.type });
+    const path = `${sid}/${d.type}-${Date.now()}.${d.real.ext}`;
+    const up = await supabase.storage.from("student-documents").upload(path, d.file, { contentType: d.real.mime });
     if (up.error) problems.push(d.type);
-    else await supabase.from("student_documents").insert({ student_id: sid, doc_type: d.type, file_path: path, file_name: d.file.name, mime_type: d.file.type, size_bytes: d.file.size });
+    else await supabase.from("student_documents").insert({ student_id: sid, doc_type: d.type, file_path: path, file_name: safeFileName(d.file.name), mime_type: d.real.mime, size_bytes: d.file.size });
   }
   revalidatePath("/students", "layout");
   redirect(`/students/${sid}?saved=${problems.length ? "partial" : "1"}`);
@@ -171,11 +180,14 @@ export async function uploadStudentDocument(_: ActionState, fd: FormData): Promi
   if (!(file instanceof File) || file.size === 0) return { fieldErrors: { file: ["Choose a file"] } };
   if (!DOC_TYPES.includes(file.type)) return { fieldErrors: { file: ["Use a PDF or an image"] } };
   if (file.size > 5 * 1024 * 1024) return { fieldErrors: { file: ["Must be under 5 MB"] } };
+  if (!safePathPart(docType)) return { fieldErrors: { doc_type: ["Pick a document type"] } };
+  const real = await checkUpload(file, DOCUMENTS);
+  if (!real.ok) return { fieldErrors: { file: [real.error] } };
   const supabase = await createClient();
-  const path = `${studentId}/${docType}-${Date.now()}.${ext(file)}`;
-  const up = await supabase.storage.from("student-documents").upload(path, file, { contentType: file.type });
-  if (up.error) return { error: up.error.message };
-  const { error } = await supabase.from("student_documents").insert({ student_id: studentId, doc_type: docType, file_path: path, file_name: file.name, mime_type: file.type, size_bytes: file.size });
+  const path = `${studentId}/${docType}-${Date.now()}.${real.ext}`;
+  const up = await supabase.storage.from("student-documents").upload(path, file, { contentType: real.mime });
+  if (up.error) return { error: friendlyDbError(up.error as { message: string }) };
+  const { error } = await supabase.from("student_documents").insert({ student_id: studentId, doc_type: docType, file_path: path, file_name: safeFileName(file.name), mime_type: real.mime, size_bytes: file.size });
   if (error) return { error: friendlyDbError(error) };
   revalidatePath(`/students/${studentId}`);
   return { ok: true, message: "Document uploaded." };

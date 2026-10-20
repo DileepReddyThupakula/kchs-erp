@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePage } from "@/features/students/page-guard";
 import type { Bundle, CheckItem, Kind, Lang } from "./shared";
+import { safeDbMessage } from "@/lib/utils";
 
 export type Res<T extends object = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -12,7 +13,7 @@ const GUARD = "/students/certificates";
 function plain(message: string | undefined): string {
   if (!message) return "Something went wrong. Nothing was changed.";
   if (/permission denied|not allowed/i.test(message)) return "You do not have access to this.";
-  return message;
+  return safeDbMessage(message);
 }
 
 export async function searchStudents(q: string, kind: Kind): Promise<Res<{ rows: { id: string; name: string; admission_no: string; status: string; class: string | null }[] }>> {

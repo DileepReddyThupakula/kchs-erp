@@ -15,22 +15,34 @@ export type ActionState = {
 
 export const initialActionState: ActionState = {};
 
-/** Turn a Postgres/PostgREST error into a message staff can understand. */
+/** What Postgres, PostgREST and Supabase say about themselves (table, column and constraint names, JWT, schema cache...). Never shown to staff. */
+const SYSTEM_TEXT = /violates (check|foreign key|unique|not-null|exclusion) constraint|duplicate key value|null value in column|invalid input syntax|invalid input value|out of range|value too long|relation "|column "|function .* does not exist|syntax error|permission denied for|row-level security|new row for relation|JWT|PGRST|schema cache|could not (serialize|connect|obtain|open|read)|deadlock|statement timeout|connection (refused|terminated|to )|FATAL|ERROR:|at character|\bpg_|\bpublic\.|\bapp\.|\bauth\.|\bstorage\./i;
+
+const GENERIC = "Something went wrong. Nothing was changed. Please try again, and tell the Admin if it keeps happening.";
+
+/**
+ * A database message that is safe to show to staff. The messages our own database functions raise are written for staff and are kept.
+ * Anything else (a Postgres, PostgREST or storage message) is written to the SERVER log and replaced by a short generic text.
+ */
+export function safeDbMessage(message: string | undefined | null, code?: string | null): string {
+  if (!message) return GENERIC;
+  if (code === "42501" || /\bnot allowed\b|permission denied/i.test(message)) return "You don't have permission to do this.";
+  if (!SYSTEM_TEXT.test(message) && (!code || ["P0001", "P0002", "23514", "23505", "23503", "23P01"].includes(code))) return message;
+  console.error("[db-error]", code ?? "-", message.slice(0, 500));
+  switch (code) {
+    case "23505": return "This already exists (duplicate name or code).";
+    case "23503": return "This is still in use elsewhere, so it can't be removed.";
+    case "23502": return "A required value is missing.";
+    case "23514": return "That value is not allowed. Please check what you entered.";
+    case "22P02": case "22007": case "22008": case "22003": case "22001": return "A value is not in the right format.";
+    default: return GENERIC;
+  }
+}
+
+/** Turn a Postgres/PostgREST error into a message staff can understand (see safeDbMessage). */
 export function friendlyDbError(err: { code?: string; message: string } | null): string {
   if (!err) return "Something went wrong.";
-  switch (err.code) {
-    case "23505":
-      return "This already exists (duplicate name or code).";
-    case "23503":
-      return "This is still in use elsewhere, so it can't be removed.";
-    case "42501":
-      return "You don't have permission to do this.";
-    case "23514":
-    case "P0001":
-      return err.message;
-    default:
-      return err.message;
-  }
+  return safeDbMessage(err.message, err.code);
 }
 
 export function formatDate(d: string | null | undefined) {

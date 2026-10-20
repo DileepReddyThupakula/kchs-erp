@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { formatDate } from "@/lib/utils";
+import { formatDate, friendlyDbError } from "@/lib/utils";
 import type { ReportData, ReportId } from "./shared";
 
 type Supa = Awaited<ReturnType<typeof createClient>>;
@@ -29,7 +29,7 @@ export async function getReport(supabase: Supa, id: ReportId, p: ReportParams): 
   switch (id) {
     case "strength": {
       const { data, error } = await supabase.rpc("report_strength", { p_year: p.yearId });
-      if (error) return forbidden(error) ? { forbidden: true } : { error: error.message };
+      if (error) return forbidden(error) ? { forbidden: true } : { error: friendlyDbError(error) };
       return {
         data: {
           id, title: "Strength by class and section", subtitle: `${year} · as on ${formatDate(p.today)}`,
@@ -44,7 +44,7 @@ export async function getReport(supabase: Supa, id: ReportId, p: ReportParams): 
     }
     case "demographics": {
       const { data, error } = await supabase.rpc("report_demographics", { p_year: p.yearId });
-      if (error) return forbidden(error) ? { forbidden: true } : { error: error.message };
+      if (error) return forbidden(error) ? { forbidden: true } : { error: friendlyDbError(error) };
       return {
         data: {
           id, title: "Demographics: social category and religion", subtitle: `${year} · active students · counts only`,
@@ -57,7 +57,7 @@ export async function getReport(supabase: Supa, id: ReportId, p: ReportParams): 
       const from = p.from ?? p.today.slice(0, 7) + "-01";
       const to = p.to ?? p.today;
       const { data, error } = await supabase.rpc("report_admissions", { p_year: p.yearId, p_from: from, p_to: to });
-      if (error) return forbidden(error) ? { forbidden: true } : { error: error.message };
+      if (error) return forbidden(error) ? { forbidden: true } : { error: friendlyDbError(error) };
       return {
         data: {
           id, title: "Admissions and leavers", subtitle: `${formatDate(from)} to ${formatDate(to)}`,
@@ -73,7 +73,7 @@ export async function getReport(supabase: Supa, id: ReportId, p: ReportParams): 
     case "fee-dues-class": {
       const upto = p.upto ?? p.today;
       const { data, error } = await supabase.rpc("report_fee_dues_by_class", { p_year: p.yearId, p_upto: upto });
-      if (error) return forbidden(error) ? { forbidden: true } : { error: error.message };
+      if (error) return forbidden(error) ? { forbidden: true } : { error: friendlyDbError(error) };
       return {
         data: {
           id, title: "Fee dues by class", subtitle: `${year} · dues up to ${formatDate(upto)}`,
@@ -85,7 +85,7 @@ export async function getReport(supabase: Supa, id: ReportId, p: ReportParams): 
     }
     case "fee-monthly": {
       const { data, error } = await supabase.rpc("report_fee_collection_monthly", { p_year: p.yearId });
-      if (error) return forbidden(error) ? { forbidden: true } : { error: error.message };
+      if (error) return forbidden(error) ? { forbidden: true } : { error: friendlyDbError(error) };
       return {
         data: {
           id, title: "Fee collection by month", subtitle: year,
@@ -101,7 +101,7 @@ export async function getReport(supabase: Supa, id: ReportId, p: ReportParams): 
     }
     case "fee-concessions": {
       const { data, error } = await supabase.rpc("report_fee_concessions", { p_year: p.yearId });
-      if (error) return forbidden(error) ? { forbidden: true } : { error: error.message };
+      if (error) return forbidden(error) ? { forbidden: true } : { error: friendlyDbError(error) };
       return {
         data: {
           id, title: "Concessions by fee head", subtitle: year,
@@ -164,7 +164,7 @@ export async function getReport(supabase: Supa, id: ReportId, p: ReportParams): 
       const from = p.from ?? p.today.slice(0, 7) + "-01";
       const to = p.to ?? p.today;
       const { data, error } = await supabase.rpc("report_staff_attendance", { p_from: from, p_to: to });
-      if (error) return forbidden(error) ? { forbidden: true } : { error: error.message };
+      if (error) return forbidden(error) ? { forbidden: true } : { error: friendlyDbError(error) };
       return {
         data: {
           id, title: "Staff attendance summary", subtitle: `${formatDate(from)} to ${formatDate(to)}`,

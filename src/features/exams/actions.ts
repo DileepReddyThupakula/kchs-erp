@@ -3,14 +3,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireCapability, requireStaff } from "@/lib/auth/session";
+import { friendlyDbError } from "@/lib/utils";
 
 const uuid = z.string().uuid();
 export type ExResult<T = unknown> = ({ ok: true; message?: string } & T) | { ok: false; error: string };
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 
 function msg(err: { code?: string; message: string }): string {
-  if (err.code === "42501") return "You don't have permission to do this.";
-  return err.message;
+  return friendlyDbError(err);
 }
 const refresh = () => revalidatePath("/exams", "layout");
 

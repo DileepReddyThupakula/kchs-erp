@@ -57,11 +57,15 @@ select pg_temp.logout();
 update public.marks set marks = 15 where component_id = '65300000-0000-4000-fb00-000000000001';   -- changed AFTER unlock -> alert
 update public.marks set marks = 16 where component_id = '65300000-0000-4000-fb00-000000000002';   -- exam never unlocked -> no alert
 -- failed sign-ins (nobody is signed in): 5 on one address, 4 on another, 25 on a third (throttled)
-select pg_temp.login_as(null);
-select public.log_failed_login('victim-au@school.test') from generate_series(1, 5);
-select public.log_failed_login('calm-au@school.test') from generate_series(1, 4);
-select public.log_failed_login('flood-au@school.test') from generate_series(1, 25);
-select public.log_failed_login('not an email'), public.log_failed_login(null), public.log_failed_login(repeat('a', 300) || '@x.test');
+-- the function is for the app server only (service key); here the test runs as the database owner, with a different IP for each call
+select public.log_failed_login('victim-au@school.test', '10.1.0.' || g, 'Test Browser/1.0') from generate_series(1, 5) g;
+select public.log_failed_login('calm-au@school.test', '10.2.0.' || g, 'Test Browser/1.0') from generate_series(1, 4) g;
+select public.log_failed_login('flood-au@school.test', '10.3.0.' || g, 'Test Browser/1.0') from generate_series(1, 25) g;
+select public.log_failed_login('not an email', '10.4.0.1', null), public.log_failed_login(null, null, null), public.log_failed_login(repeat('a', 300) || '@x.test', null, null);
+-- one attacker address trying many different accounts: only 10 a minute are written for that address
+select public.log_failed_login('spray' || g || '-au@school.test', '10.9.9.9', 'Attacker/1.0') from generate_series(1, 30) g;
+-- ...and that does not use up anyone else's allowance
+select public.log_failed_login('honest-au@school.test', '10.8.8.8', 'Real Browser/1.0');
 select pg_temp.logout();
 
 -- ================= the Admin sees it, in plain words
@@ -83,6 +87,8 @@ select pg_temp.ok(pg_temp.alert_delta('staff_deactivated') = 1, 'alert: staff de
 select pg_temp.ok(pg_temp.alert_delta('duties_changed') >= 1, 'alert: duty given (counted)', pg_temp.alert_delta('duties_changed')::text);
 select pg_temp.ok(pg_temp.alert_delta('failed_logins') = 25, 'alert: failed sign-ins count only for addresses with 5+ in 15 minutes (5 + the 20 recorded for the flooded one; the address with 4 does not count)', pg_temp.alert_delta('failed_logins')::text);
 select pg_temp.counts($$select count(*) from public.audit_logs where action = 'auth.login_failed' and details ->> 'email' = 'flood-au@school.test'$$, 20, 'failed sign-ins: at most 20 per address per hour are written (flooding is throttled)');
+select pg_temp.counts($$select count(*) from public.audit_logs where action = 'auth.login_failed' and details ->> 'ip' = '10.9.9.9'$$, 10, 'failed sign-ins: one IP address writes at most 10 a minute');
+select pg_temp.counts($$select count(*) from public.audit_logs where action = 'auth.login_failed' and details ->> 'email' = 'honest-au@school.test' and details ->> 'ip' = '10.8.8.8' and details ->> 'user_agent' = 'Real Browser/1.0'$$, 1, 'failed sign-ins: another IP address is not blocked by the attacker, and its IP and browser are recorded');
 select pg_temp.counts($$select count(*) from public.audit_logs where action = 'auth.login_failed' and (details ->> 'email' is null or details ->> 'email' not like '%@%')$$, 0, 'failed sign-ins: malformed / empty / over-long addresses are not written');
 select pg_temp.ok((public.admin_dashboard('2f000000-0000-4000-fb00-000000000001', current_date) -> 'alerts' -> 'items') is not null, 'Admin dashboard carries the alerts in the same single call');
 
@@ -159,7 +165,7 @@ select pg_temp.counts($$select count(*) from public.audit_logs$$, 0, 'deactivate
 select pg_temp.login_as('00000000-0000-4000-fb00-000000000006'); select pg_temp.refused('deactivated teacher');
 select pg_temp.login_as(null); select pg_temp.refused('not signed in');
 select pg_temp.throws($$select count(*) from public.audit_logs$$, 'not signed in: cannot read the audit table at all', '42501');
-select pg_temp.lives($$select public.log_failed_login('anon-ok@school.test')$$, 'not signed in: may report a failed sign-in (that is the only thing allowed)');
+select pg_temp.throws($$select public.log_failed_login('anon-bad@school.test', '10.5.5.5', 'x')$$, 'not signed in: can no longer call the failed sign-in log directly (only the app server can)', '42501');
 select pg_temp.throws($$select public.log_event('x')$$, 'not signed in: cannot write other log events', '42501');
 select pg_temp.logout();
 
