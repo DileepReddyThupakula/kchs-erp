@@ -457,3 +457,4 @@ Answers given: custom editable scheme; Nursery to UKG grades and remarks; co-sch
 
 ## IC — ID cards: questions being answered one at a time (started 2026-10-20; not built yet)
 - **IC1 Who (decided 2026-10-20):** STUDENT cards now. Staff cards later (P2-2): the card template is designed so a staff layout can be added without redoing the student cards. Nothing is built for staff now.
+- **IC2 Size and printing (decided 2026-10-20):** standard CR80 card, 86 x 54 mm (landscape), 10 per A4 sheet (2 across x 5 down) from an ordinary office printer, with thin cut marks, cut by hand. Front and back are separate sheets (printed double-sided or one after the other). The card artwork is kept as one exact 86 x 54 mm unit so a plastic-card printer could be added later without redesign (not built).
