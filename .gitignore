@@ -58,3 +58,16 @@ next-env.d.ts
 *.dump
 *.bak
 .scratch/
+
+# backups and keys: NEVER commit (they hold children's data / the master key). The scripts write to ~/KCHS-Backups, outside the repo; these lines are a second lock.
+/KCHS-Backups/
+/KCHS-Backup-Keys/
+/backups/
+/backup-keys/
+*.enc
+*.enc.partial
+*.enc.sha256
+*.pem
+*.p12
+*.pfx
+*.age

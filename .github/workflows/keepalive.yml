@@ -1,0 +1,40 @@
+# Keeps a Supabase FREE project from being paused for inactivity, by asking it something harmless once a day.
+# It holds NO secrets: the project address and the PUBLIC (anon) key are plain repository VARIABLES (not secrets).
+#   Settings -> Secrets and variables -> Actions -> Variables:
+#     SUPABASE_URL       e.g. https://abcdefgh.supabase.co      (until you set it, the dev project below is used)
+#     SUPABASE_ANON_KEY  the project's public "anon" key        (Project settings -> API). Required.
+# If the check fails, GitHub emails the repository owner: a failed run is the alarm.
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: "17 3 * * *"      # every day, 03:17 UTC (08:47 India time)
+  workflow_dispatch: {}        # "Run workflow" button, to test it by hand
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://cndkkullvdxwesskbznx.supabase.co' }}   # placeholder: the DEV project
+      SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+    steps:
+      - name: Ask the database a harmless question
+        run: |
+          set -u
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::The repository variable SUPABASE_ANON_KEY is not set (Settings -> Secrets and variables -> Actions -> Variables)."
+            exit 1
+          fi
+          url="${SUPABASE_URL%/}"
+          # 1) a real database call that anybody may make: the school's public branding (name and logo)
+          code=$(curl -sS --retry 3 --retry-delay 10 --max-time 30 -o /dev/null -w "%{http_code}" -X POST "$url/rest/v1/rpc/public_branding" \
+            -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" -H "Content-Type: application/json" -d '{}')
+          echo "database call: HTTP $code"
+          [ "$code" = "200" ] || { echo "::error::The database did not answer normally (HTTP $code). The project may be paused: open the Supabase dashboard."; exit 1; }
+          # 2) the sign-in service
+          code=$(curl -sS --retry 3 --retry-delay 10 --max-time 30 -o /dev/null -w "%{http_code}" "$url/auth/v1/health" -H "apikey: $SUPABASE_ANON_KEY")
+          echo "sign-in service: HTTP $code"
+          [ "$code" = "200" ] || { echo "::error::The sign-in service did not answer normally (HTTP $code)."; exit 1; }

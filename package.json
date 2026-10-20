@@ -31,7 +31,14 @@
     "seed:demo-bulk": "node --env-file-if-exists=.env.local scripts/demo-bulk-students.mjs seed",
     "wipe:demo-bulk": "node --env-file-if-exists=.env.local scripts/demo-bulk-students.mjs wipe",
     "seed:demo-exams": "node --env-file-if-exists=.env.local scripts/demo-exams.mjs seed",
-    "wipe:demo-exams": "node --env-file-if-exists=.env.local scripts/demo-exams.mjs wipe"
+    "wipe:demo-exams": "node --env-file-if-exists=.env.local scripts/demo-exams.mjs wipe",
+    "backup:keygen": "node scripts/backup/keygen.mjs",
+    "backup:db": "node --env-file=.env.local scripts/backup/db.mjs",
+    "backup:files": "node --env-file=.env.local scripts/backup/files.mjs",
+    "restore:db": "node --env-file-if-exists=.env.local scripts/backup/restore.mjs db",
+    "restore:files": "node --env-file-if-exists=.env.local scripts/backup/restore.mjs files",
+    "restore:check": "node --env-file-if-exists=.env.local scripts/backup/restore-check.mjs",
+    "scan:secrets": "node scripts/dev/secret-scan.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
