@@ -36,7 +36,7 @@ Dashboard layout changes from time to time: use the search box at the top if a n
 6. **School set-up by the Admin**: school details, classes and sections, subjects, fee structure. Only then real students (R12: after the security review).
 
 ## D. Added later: login IDs, and dev is one migration ahead (2026-10-31)
-- **Production is one migration behind dev** until go-live: `20261031000005_login_id.sql` (mobile number / username sign-in, the login-ID table, the lock). It has NOT been applied to production. When you say so, run: `npm run db:apply -- --all --production` (it asks you to type the last 4 letters of the project id). Then re-run the production comparison (tables will be 85 instead of 84).
+- **Production and dev are level again** (57 migrations each) since 2026-10-31: `20261031000005_login_id.sql` was applied to production after your APPLY, and the comparison showed no differences.
 - **Before deploying the app to production, make a `LOGIN_KEY_SECRET`** (long random value, different from dev) and put it in the hosting variables and in `.env.kchs-production`. Without it sign-in refuses to work.
 - **Emergency Admin password reset** (only if the Admin has forgotten the password and nobody else can reset it): `npm run reset-admin-password -- --production` on your Mac. It asks for the project name, the Admin's login ID, and the new password twice (hidden). The Admin must then choose a new password at once.
 - **The first Admin script (to be built) will recommend a real email** for the Admin.
@@ -45,7 +45,7 @@ Dashboard layout changes from time to time: use the search box at the top if a n
 ## E. GO-LIVE ORDER (final; each step only after the one before is done)
 Tick each box. Names of settings only: values are never written here.
 
-1. **[ ] Production database up to date.** `npm run db:apply -- --all --production --dry-run` shows exactly one file, `20261031000005_login_id.sql` (56 -> 57); you type APPLY in the chat; then it is applied and compared with dev. *(Status: dry run done and shown; waiting for your APPLY.)*
+1. **[x] Production database up to date (done 2026-10-31).** `npm run db:apply -- --all --production --dry-run` shows exactly one file, `20261031000005_login_id.sql` (56 -> 57); you type APPLY in the chat; then it is applied and compared with dev. *(Applied after your APPLY: production 57 of 57; compared with dev: no differences.)*
 2. **[ ] Supabase dashboard settings** (section A above): sign-up OFF, minimum password length 10, rate limits read and noted, session expiry noted, leaked-password protection if the plan allows, only the Email provider on.
 3. **[ ] Vercel project settings and variables** (sections F and G below), **Production environment only**.
 4. **[ ] Deploy** the `main` branch to Production (the repo's `vercel.json` pins the server functions to Mumbai, `bom1`). Open the first deployment's logs and check the function region says Mumbai. Do NOT sign in yet.
