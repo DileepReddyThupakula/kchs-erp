@@ -90,6 +90,22 @@ describe("the wording logic", () => {
   });
 });
 
+describe("valid HTML (a div inside a p breaks the page when it loads)", () => {
+  it("no certificate sheet has a div, table or list inside a paragraph", () => {
+    for (const k of ["tc", "bonafide", "study"] as Kind[]) {
+      for (const lang of ["en", "te", "both"] as const) {
+        const { container } = sheet(bundle(k, k === "bonafide" ? { duplicate: { is_duplicate: true, copy_no: 2, printed_at: "2026-10-20T05:00:00Z", reason: "lost", reason_note: null } } : {}), lang);
+        expect(container.querySelectorAll("p div, p table, p ul, p p, span div").length).toBe(0);
+        cleanup();
+      }
+    }
+  });
+  it("nor does the print page", () => {
+    const { container } = panel(bundle("tc"), { ...state, needs_reason: true });
+    expect(container.querySelectorAll("p div, p table, p ul, p p, span div").length).toBe(0);
+  });
+});
+
 describe("the printed sheet", () => {
   it("a TC shows the DRAFT mark while the layout is a draft; a bonafide never does", () => {
     sheet(bundle("tc"));

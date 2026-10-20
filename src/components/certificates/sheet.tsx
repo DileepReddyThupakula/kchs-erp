@@ -10,10 +10,12 @@ const box = { border: "0.3mm solid #111" } as const;
 function Both({ en, te, lang, size = "10.5pt", bold = false, align = "left" }: { en: string; te?: string; lang: Lang; size?: string; bold?: boolean; align?: "left" | "center" | "right" }) {
   // a value that is the same in both languages (a date, a class, a number) is printed once, not twice
   if (lang === "both" && (te === undefined || te === en)) lang = "en";
+  // spans (display: block), never divs: this is used inside paragraphs, and a div inside a p breaks the page when it loads
+  const line = { display: "block", fontSize: size, fontWeight: bold ? 700 : 400, textAlign: align } as const;
   return (
     <>
-      {lang !== "te" && <div style={{ fontSize: size, fontWeight: bold ? 700 : 400, textAlign: align }}>{en}</div>}
-      {lang !== "en" && <div lang="te" style={{ ...TE, fontSize: size, fontWeight: bold ? 700 : 400, textAlign: align }}>{te ?? en}</div>}
+      {lang !== "te" && <span style={line}>{en}</span>}
+      {lang !== "en" && <span lang="te" style={{ ...TE, ...line }}>{te ?? en}</span>}
     </>
   );
 }

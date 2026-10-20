@@ -78,6 +78,9 @@ export default async function run({ ok, skip }) {
   const { data: adm } = await svc.from("staff").select("user_id").eq("employee_code", "DEMO-ADM").single();
   const db = new pg.Client({ connectionString: dbUrl });
   await db.connect();
+  // what this test must leave exactly as it found it
+  const footprint = async () => JSON.stringify((await db.query(`select (select count(*) from public.students where status <> 'active') not_active, (select count(*) from public.certificates) certs, (select count(*) from public.certificate_prints) prints, (select count(*) from public.certificate_series) series, (select count(*) from public.staff_permissions where duty = 'certificates_idcards') duty, (select md5(string_agg(kind || layout_draft::text || wording_confirmed::text, ',' order by kind)) from public.certificate_templates) templates, (select md5(row(prefix_tc, prefix_bonafide, prefix_study, show_signature_image)::text) from public.certificate_settings) settings`)).rows[0]);
+  const before0 = await footprint();
   const before = (await db.query("select start_no, next_no from public.certificate_series where kind = 'bonafide' and academic_year_id = $1", [yr.id])).rows[0] ?? null;
   const made = [];
   try {
@@ -97,6 +100,7 @@ export default async function run({ ok, skip }) {
     }
     if (before) await db.query("update public.certificate_series set next_no = $2, start_no = $3 where kind = 'bonafide' and academic_year_id = $1", [yr.id, before.next_no, before.start_no]);
     else await db.query("delete from public.certificate_series where kind = 'bonafide' and academic_year_id = $1", [yr.id]);
+    ok(await footprint() === before0, "clean-up: no student status, certificate, duty, template or setting was left changed by this test");
     await db.end();
   }
 }
