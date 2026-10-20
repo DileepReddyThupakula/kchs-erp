@@ -12,7 +12,7 @@ import readline from "node:readline/promises";
 /** Projects where seeding, wiping and tests are allowed. Anything else is refused. (The project ID is not a secret.) */
 export const DEV_REFS = ["cndkkullvdxwesskbznx"];
 /** The production project(s): used only to give a clearer message; refusal does not depend on this list. */
-export const PROD_REFS = [];
+export const PROD_REFS = ["zxgvxtwtdevlezciymjf"];
 export const PROD_FILE = ".env.production.local";
 const SECRET_KEYS = ["DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "DEMO_USER_PASSWORD", "KCHS_ENV"];
 

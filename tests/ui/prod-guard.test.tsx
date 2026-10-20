@@ -17,6 +17,17 @@ const envFor = (ref: string) => ({
 const run = (args: string[], env: Record<string, string>, cwd = root) =>
   spawnSync(process.execPath, args, { cwd, env: { PATH: process.env.PATH ?? "", ...env }, encoding: "utf8", timeout: 20000 });
 
+describe("the real project ids", () => {
+  it("production is listed, development is allowed, and they are never the same", () => {
+    expect(PROD_REFS).toEqual(["zxgvxtwtdevlezciymjf"]);
+    expect(DEV_REFS).toEqual(["cndkkullvdxwesskbznx"]);
+    expect(PROD_REFS.some((r) => DEV_REFS.includes(r))).toBe(false);
+  });
+  it("the real production address is refused by the dev-only check, with the clear message", () => {
+    expect(devOnlyProblem(envFor("zxgvxtwtdevlezciymjf"))).toMatch(/PRODUCTION project/);
+  });
+});
+
 describe("which project does the environment point at", () => {
   it("accepts only the development project", () => {
     expect(devOnlyProblem(envFor(DEV))).toBeNull();
