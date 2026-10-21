@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
+import { demoProblem } from "./src/lib/demo-guard.mjs";
 
 const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname : undefined;
+
+// The public demo may only ever run against the development project (fail closed). This runs at build AND at start.
+const demoWhy = demoProblem(process.env as Record<string, string | undefined>);
+if (demoWhy) throw new Error(`Demo site refused to start: ${demoWhy}`);
+const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 const isDev = process.env.NODE_ENV !== "production";
 const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin : "";
@@ -39,6 +45,20 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Demo site: the real school logo and icons that live in this repo are never served; the generic ones are.
+  async redirects() {
+    if (!isDemo) return [];
+    const to = (source: string, destination: string) => ({ source, destination, permanent: false });
+    return [
+      to("/brand/:file", "/demo/demo-logo-512.png"),
+      to("/icon.png", "/demo/demo-icon-192.png"),
+      to("/apple-icon.png", "/demo/demo-icon-192.png"),
+      to("/icons/icon-192.png", "/demo/demo-icon-192.png"),
+      to("/icons/maskable-192.png", "/demo/demo-icon-192.png"),
+      to("/icons/icon-512.png", "/demo/demo-icon-512.png"),
+      to("/icons/maskable-512.png", "/demo/demo-icon-512.png"),
+    ];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

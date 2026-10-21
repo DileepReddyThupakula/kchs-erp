@@ -68,8 +68,9 @@ export async function restoreDb(parts, env, { scratch }) {
       create function auth.email() returns text language sql stable as $$ select nullif(current_setting('request.jwt.claim.email', true), '')::text $$;
       create function auth.jwt() returns jsonb language sql stable as $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
       create function storage.foldername(name text) returns text[] language sql immutable as $$ select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;`], { env });
-    const s = await pgRestore(parts.shape, env, [], ["TRIGGER"]);
-    s.errors = s.errors.filter((e) => !/schema "app" does not exist/.test(e));   // the storage rules need the school's functions; they are added again at the end
+    // first only the tables: the storage ACCESS RULES (policies) call the school's own functions and use its own types (public.staff_duty, the app schema),
+    // which do not exist yet, so they are left out here and restored in the last step. Any message left here is therefore a real one.
+    const s = await pgRestore(parts.shape, env, [], ["TRIGGER", "POLICY"]);
     log.push({ step: "structure of the login and file-list tables", ...s });
   }
   const d = await pgRestore(parts.data, env, scratch ? ["--data-only", "--disable-triggers"] : ["--data-only"]);

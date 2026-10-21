@@ -2,6 +2,7 @@ import { getBranding } from "@/lib/branding";
 import { LoginScene } from "@/components/brand/login-scene";
 import { TiltLogo } from "@/components/brand/tilt-logo";
 import { LoginForm } from "./login-form";
+import { DemoAccounts } from "@/components/demo/demo-accounts";
 
 export const metadata = { title: "Sign in" };
 
@@ -35,6 +36,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             </p>
           )}
           <LoginForm />
+          <DemoAccounts />
         </div>
       </div>
     </main>

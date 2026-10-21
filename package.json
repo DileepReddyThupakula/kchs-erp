@@ -42,7 +42,8 @@
     "reset-admin-password": "node --env-file-if-exists=.env.local scripts/reset-admin-password.mjs",
     "prebuild": "node scripts/dev/no-prod-env.mjs",
     "prestart": "node scripts/dev/no-prod-env.mjs",
-    "create-first-admin": "node --env-file-if-exists=.env.local scripts/create-first-admin.mjs"
+    "create-first-admin": "node --env-file-if-exists=.env.local scripts/create-first-admin.mjs",
+    "demo:reset": "node --env-file-if-exists=.env.local scripts/demo-reset.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

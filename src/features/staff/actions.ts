@@ -10,6 +10,7 @@ import { friendlyDbError, type ActionState } from "@/lib/utils";
 import { passwordSchema } from "./password";
 import { MUST_CHANGE_KEY } from "@/lib/auth/force-change";
 import { loginLabel, parseLoginId } from "@/lib/auth/login-id.mjs";
+import { DEMO_MESSAGE, DEMO_MODE, demoBlock } from "@/lib/demo";
 
 const opt = z
   .string()
@@ -55,6 +56,7 @@ async function syncLoginBan(staffId: string, blocked: boolean) {
 export async function saveStaff(_: ActionState, fd: FormData): Promise<ActionState> {
   await requireCapability("staff.edit");
   const parsed = staffSchema.safeParse(Object.fromEntries(fd));
+  if (DEMO_MODE && parsed.success && parsed.data.status !== "active") return { error: DEMO_MESSAGE };   // public demo: nobody can be deactivated
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors, error: "Please fix the highlighted fields." };
   const id = fd.get("id")?.toString();
   const supabase = await createClient();
@@ -79,6 +81,7 @@ const loginIdField = z.string().trim().min(1, "Enter a mobile number, a username
 
 /** Create an Auth login for a staff member and give it a role. Admin only. The login ID is an email, a 10-digit mobile number or a username. */
 export async function createLogin(_: ActionState, fd: FormData): Promise<ActionState> {
+  { const d = demoBlock(); if (d) return d; }   // public demo: turned off
   await requireCapability("users.manage");
   const parsed = z
     .object({
@@ -123,6 +126,7 @@ export async function createLogin(_: ActionState, fd: FormData): Promise<ActionS
 
 /** Change a staff member's login ID (for example a new mobile number). Same account, same password. Admin only. */
 export async function changeLoginId(_: ActionState, fd: FormData): Promise<ActionState> {
+  { const d = demoBlock(); if (d) return d; }   // public demo: turned off
   await requireCapability("users.manage");
   const parsed = z.object({ staff_id: z.string().uuid(), login_id: loginIdField }).safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
@@ -152,6 +156,7 @@ export async function changeLoginId(_: ActionState, fd: FormData): Promise<Actio
 }
 
 export async function changeRole(_: ActionState, fd: FormData): Promise<ActionState> {
+  { const d = demoBlock(); if (d) return d; }   // public demo: turned off
   await requireCapability("users.manage");
   const staff_id = z.string().uuid().parse(fd.get("staff_id"));
   const raw = fd.get("app_role")?.toString() ?? "";
@@ -165,6 +170,7 @@ export async function changeRole(_: ActionState, fd: FormData): Promise<ActionSt
 }
 
 export async function resetPassword(_: ActionState, fd: FormData): Promise<ActionState> {
+  { const d = demoBlock(); if (d) return d; }   // public demo: turned off
   await requireCapability("users.manage");
   const parsed = z.object({ staff_id: z.string().uuid(), password: passwordSchema }).safeParse(Object.fromEntries(fd));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
@@ -183,6 +189,7 @@ export async function resetPassword(_: ActionState, fd: FormData): Promise<Actio
  * enforces this too and writes every grant/revoke to the audit log.
  */
 export async function saveDuties(_: ActionState, fd: FormData): Promise<ActionState> {
+  { const d = demoBlock(); if (d) return d; }   // public demo: turned off
   await requireCapability("duties.manage");
   const staff_id = z.string().uuid().parse(fd.get("staff_id"));
   const wanted = new Set(

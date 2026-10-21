@@ -9,6 +9,7 @@ import type { Json } from "@/types/database";
 import { UPI_ID_RE } from "./upi";
 import { getFeeHeads, toDueRow, type DueRow } from "./queries";
 import { checkUpload, IMAGES } from "@/lib/upload-check";
+import { demoBlock } from "@/lib/demo";
 
 const uuid = z.string().uuid();
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -471,6 +472,7 @@ export async function savePaymentSettings(_: ActionState, fd: FormData): Promise
 }
 
 export async function uploadPaymentQr(_: ActionState, fd: FormData): Promise<ActionState> {
+  { const d = demoBlock(); if (d) return d; }   // public demo: turned off
   await requireCapability("fees.setup");
   const file = fd.get("file");
   if (!(file instanceof File) || file.size === 0) return invalid("Choose the QR image.", "file");

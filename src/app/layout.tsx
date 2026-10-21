@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Cinzel, Noto_Sans, Noto_Sans_Telugu } from "next/font/google";
 import { Toaster } from "sonner";
 import { getBranding } from "@/lib/branding";
+import { DEMO_MODE } from "@/lib/demo";
+import { DemoBanner } from "@/components/demo/demo-banner";
 import "./globals.css";
 
 const notoSans = Noto_Sans({ variable: "--font-noto-sans", subsets: ["latin"], display: "swap" });
@@ -16,6 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { default: name, template: `%s · ${shortName}` },
     description: `${name}: school management for staff`,
     manifest: "/manifest.webmanifest",
+    ...(DEMO_MODE ? { robots: { index: false, follow: false } } : {}),   // the demo is for people with the link, not for search engines
     appleWebApp: { capable: true, title: shortName, statusBarStyle: "black-translucent" },
   };
 }
@@ -27,6 +30,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body className={`${notoSans.variable} ${notoTelugu.variable} ${cinzel.variable} font-sans antialiased`}>
         {children}
+        <DemoBanner />
         <Toaster
           position="top-center"
           richColors

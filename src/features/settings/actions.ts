@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireCapability } from "@/lib/auth/session";
 import { friendlyDbError, type ActionState } from "@/lib/utils";
 import { checkUpload, LOGOS } from "@/lib/upload-check";
+import { demoBlock } from "@/lib/demo";
 
 const optional = z
   .string()
@@ -46,6 +47,7 @@ const schema = z.object({
 });
 
 export async function updateSettings(_: ActionState, formData: FormData): Promise<ActionState> {
+  { const d = demoBlock(); if (d) return d; }   // public demo: turned off
   await requireCapability("settings.edit");
   const raw = Object.fromEntries(formData);
   const parsed = schema.safeParse({
@@ -69,6 +71,7 @@ export async function updateSettings(_: ActionState, formData: FormData): Promis
 
 /** Upload logo or principal signature to the `branding` bucket. */
 export async function uploadBrandingImage(_: ActionState, formData: FormData): Promise<ActionState> {
+  { const d = demoBlock(); if (d) return d; }   // public demo: turned off
   await requireCapability("settings.edit");
   const kind = formData.get("kind");
   const file = formData.get("file");

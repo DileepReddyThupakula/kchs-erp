@@ -134,6 +134,29 @@ export async function seedDemoExams() {
   }
 }
 
+/** Deletes rows and everything that depends on them, the way ON DELETE CASCADE / SET NULL would (needed because triggers and cascades are off while wiping). */
+async function cascadeDelete(db, table, whereSql, depth = 0) {
+  if (depth > 8) throw new Error(`foreign keys nest too deeply under ${table}`);
+  const fks = await db.query(
+    `select c.conrelid::regclass::text child, a.attname child_col, af.attname parent_col, c.confdeltype kind
+       from pg_constraint c join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1] join pg_attribute af on af.attrelid = c.confrelid and af.attnum = c.confkey[1]
+      where c.contype = 'f' and c.confrelid = $1::regclass and array_length(c.conkey, 1) = 1 and c.conrelid <> c.confrelid`, [table]);
+  for (const f of fks.rows) {
+    const sub = `${f.child_col} in (select ${f.parent_col} from ${table} where ${whereSql})`;
+    if (f.kind === "c") await cascadeDelete(db, f.child, sub, depth + 1);
+    else if (f.kind === "n") await db.query(`update ${f.child} set ${f.child_col} = null where ${sub}`);
+    else {
+      // "restrict" / "no action" (for example the fee dues of a student): a database delete would be refused, so remove them too, EXCEPT
+      // money that was actually received and the audit log: those are never removed (the wipe stops instead).
+      const kept = ["public.fee_receipts", "public.fee_receipt_items", "public.audit_logs"];
+      const n = Number((await db.query(`select count(*) n from ${f.child} where ${sub}`)).rows[0].n);
+      if (n && kept.includes(f.child)) throw new Error(`${n} rows in ${f.child} depend on what is being wiped; they are never deleted`);
+      if (n) await cascadeDelete(db, f.child, sub, depth + 1);
+    }
+  }
+  return (await db.query(`delete from ${table} where ${whereSql}`)).rowCount;
+}
+
 export async function wipeDemoExams() {
   const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
   await db.connect();
@@ -141,13 +164,14 @@ export async function wipeDemoExams() {
     const { rows: has } = await db.query("select to_regclass('public.exam_components') as t");
     if (!has[0].t) return console.log("Exam tables not found: nothing to wipe.");
     await db.query("begin");
-    await db.query("set local session_replication_role = replica"); // no triggers: nothing is recalculated while deleting
+    await db.query("set local session_replication_role = replica"); // no triggers: nothing is recalculated while deleting. That also switches OFF the
+    // foreign-key cascades, so every dependent row is removed by hand below (leaving orphans broke the next re-seed).
     const c = await db.query("select count(*)::int n from public.marks where is_demo or component_id in (select id from public.exam_components where is_demo)");
-    await db.query("delete from public.report_card_prints where group_id in (select id from public.result_groups where is_demo)");
-    await db.query("delete from public.result_groups where is_demo");
-    await db.query("delete from public.exam_components where is_demo");
-    const st = await db.query("delete from public.students where is_demo and admission_no like 'DEMO-EX-%'"); // the extra dummy students
-    console.log(`Removed ${st.rowCount} extra demo students (DEMO-EX-...).`);
+    await db.query("delete from public.marks where is_demo or component_id in (select id from public.exam_components where is_demo)");
+    await cascadeDelete(db, "public.result_groups", "is_demo");
+    await cascadeDelete(db, "public.exam_components", "is_demo");
+    const st = await cascadeDelete(db, "public.students", "is_demo and admission_no like 'DEMO-EX-%'"); // the extra dummy students
+    console.log(`Removed ${st} extra demo students (DEMO-EX-...).`);
     await db.query("commit");
     console.log(`Removed the demo exam scheme and ${c.rows[0].n} demo marks (with results, grades, remarks and print records).`);
   } catch (e) {

@@ -6,6 +6,7 @@ import { requirePage } from "@/features/students/page-guard";
 import { checkBytes, PHOTOS } from "@/lib/upload-check";
 import type { Bundle, Candidate, SectionOption } from "./shared";
 import { safeDbMessage } from "@/lib/utils";
+import { DEMO_MESSAGE, DEMO_MODE } from "@/lib/demo";
 
 export type Res<T extends object = object> = ({ ok: true } & T) | { ok: false; error: string };
 const GUARD = "/students/id-cards";
@@ -139,6 +140,7 @@ export async function planPhotos(files: { name: string; width: number; height: n
   return { ok: true, rows: data as unknown as PlanRow[] };
 }
 export async function recordPhoto(student: string, path: string, w: number, h: number, bytes: number, mime: string): Promise<Res> {
+  if (DEMO_MODE) return { ok: false, error: DEMO_MESSAGE };   // public demo: no uploads
   if (!z.object({ student: uuid, path: z.string().regex(/^[0-9a-f-]{36}\/photo-\d+\.(jpg|png)$/), w: z.number().int().min(0).max(100000), h: z.number().int().min(0).max(100000), bytes: z.number().int().min(0).max(50_000_000) }).safeParse({ student, path, w, h, bytes }).success || !path.startsWith(`${student}/`)) return bad("The photo");
   const s = await db();
   // the browser uploaded this file straight to private storage: check what it really is before it is recorded

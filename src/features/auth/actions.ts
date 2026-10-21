@@ -9,6 +9,7 @@ import { clientIp } from "@/lib/auth/client-ip";
 import type { ActionState } from "@/lib/utils";
 import { passwordSchema } from "@/features/staff/password";
 import { MUST_CHANGE_KEY } from "@/lib/auth/force-change";
+import { demoBlock } from "@/lib/demo";
 
 const GENERIC = "Incorrect login ID or password.";
 const schema = z.object({
@@ -63,6 +64,7 @@ const changeSchema = z.object({ password: passwordSchema, confirm: z.string() })
 
 /** First sign-in (or after an Admin reset): the person chooses their own password, then the "must change" mark is cleared. */
 export async function changeOwnPassword(_: ActionState, formData: FormData): Promise<ActionState> {
+  { const d = demoBlock(); if (d) return d; }   // public demo: turned off
   const parsed = changeSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { fieldErrors: parsed.error.flatten().fieldErrors };
   const supabase = await createClient();

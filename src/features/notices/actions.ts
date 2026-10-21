@@ -7,6 +7,7 @@ import { translateDiaryEntry, translateNotice, translateNoticeText, REASON_TEXT 
 import { ATTACH_MAX, ATTACH_TYPES } from "./shared";
 import { checkUpload, DOCUMENTS, safeFileName } from "@/lib/upload-check";
 import { friendlyDbError } from "@/lib/utils";
+import { DEMO_MESSAGE, DEMO_MODE } from "@/lib/demo";
 
 const uuid = z.string().uuid();
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -142,6 +143,7 @@ export async function markNoticeRead(id: string): Promise<NtResult> {
 
 // ------------------------------------------------------------------ attachments
 export async function uploadAttachment(formData: FormData): Promise<NtResult> {
+  if (DEMO_MODE) return fail(DEMO_MESSAGE);   // public demo: no uploads
   const kind = formData.get("kind");
   // diary files: the author of an unpublished entry or the duty (the database decides); notice files: the duty
   if (kind === "notice") await requireCapability("notices.edit");

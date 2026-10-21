@@ -15,6 +15,7 @@ import { photoProblem } from "./photo-rules";
 import { GENDERS, parseDefinitionValue, PHONE_RE, PIN_RE, validateImportRow, type ImportContext, type RawRow, type StudentPayload, type ValidatedRow } from "./fields";
 
 import { checkUpload, DOCUMENTS, PHOTOS, safeFileName, safePathPart, type Checked } from "@/lib/upload-check";
+import { DEMO_MESSAGE, DEMO_MODE, demoBlock } from "@/lib/demo";
 
 const uuid = z.string().uuid();
 const DOC_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
@@ -33,6 +34,7 @@ function saveError(err: { code?: string; message: string }, defs: StudentFieldDe
 
 // ------------------------------------------------------------------ save (form)
 export async function saveStudentForm(_: ActionState, fd: FormData): Promise<ActionState> {
+  if (DEMO_MODE && [...fd.values()].some((v) => v instanceof File && v.size > 0)) return { error: DEMO_MESSAGE };   // public demo: no photos or documents
   await requireCapability("students.edit");
   const supabase = await createClient();
   const { definitions, docTypes } = await getStudentConfig(supabase);
@@ -172,6 +174,7 @@ export async function saveStudentForm(_: ActionState, fd: FormData): Promise<Act
 
 // ------------------------------------------------------------------ documents
 export async function uploadStudentDocument(_: ActionState, fd: FormData): Promise<ActionState> {
+  { const d = demoBlock(); if (d) return d; }   // public demo: turned off
   await requireCapability("students.edit");
   const studentId = uuid.parse(fd.get("student_id"));
   const docType = String(fd.get("doc_type") ?? "");
